@@ -9,7 +9,6 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// শুধু production-এ log করুন
 if (process.env.NODE_ENV !== "production") {
   console.log("Cloudinary config loaded:");
   console.log("  cloud_name:", process.env.CLOUDINARY_CLOUD_NAME);
@@ -19,23 +18,17 @@ if (process.env.NODE_ENV !== "production") {
   );
 }
 
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
+// ─── single upload (buffer) ───────────────────────────────────────────────────
 export const uploadToCloudinary = (fileBuffer, folder = "uploads") => {
   return new Promise((resolve, reject) => {
-    if (!fileBuffer || fileBuffer.length === 0) {
+    if (!fileBuffer || fileBuffer.length === 0)
       return reject(new Error("Empty buffer"));
-    }
 
     const timeout = setTimeout(() => {
       reject(new Error("Cloudinary upload timed out after 60s"));
     }, 60000);
 
-    const uploadStream = cloudinary.uploader.upload_stream(
+    const stream = cloudinary.uploader.upload_stream(
       { folder, resource_type: "auto" },
       (error, result) => {
         clearTimeout(timeout);
@@ -44,15 +37,24 @@ export const uploadToCloudinary = (fileBuffer, folder = "uploads") => {
       },
     );
 
-    uploadStream.on("error", (err) => {
+    stream.on("error", (err) => {
       clearTimeout(timeout);
       reject(err);
     });
-
-    uploadStream.end(fileBuffer);
+    stream.end(fileBuffer);
   });
 };
 
+// ─── alias used by avatar upload ─────────────────────────────────────────────
+// accepts a multer file object { buffer, ... }
+export const uploadSingleToCloudinary = (file, folder = "uploads") =>
+  uploadToCloudinary(file.buffer, folder);
+
+// ─── delete by publicId ───────────────────────────────────────────────────────
+export const deleteFromCloudinary = (publicId) =>
+  cloudinary.uploader.destroy(publicId);
+
+// ─── multiple upload with retry ───────────────────────────────────────────────
 const uploadWithRetry = async (fileBuffer, folder, retries = 3) => {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {

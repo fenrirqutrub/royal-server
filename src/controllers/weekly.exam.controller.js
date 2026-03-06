@@ -13,10 +13,13 @@ const generateSlug = ({ cls, ExamNumber }) =>
     .replace(/--+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-// ─── GET all ──────────────────────────────────────────────
 export const getAllWeeklyExams = async (req, res) => {
   try {
-    const exams = await WeeklyExam.find().sort({ createdAt: -1 });
+    const { teacherSlug } = req.query;
+
+    const filter = teacherSlug ? { teacherSlug } : {};
+    const exams = await WeeklyExam.find(filter).sort({ createdAt: -1 });
+
     res.status(200).json({ success: true, data: exams });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -40,9 +43,16 @@ export const getWeeklyExamBySlug = async (req, res) => {
 // ─── POST create ──────────────────────────────────────────
 export const createWeeklyExam = async (req, res) => {
   try {
-    const { subject, teacher, class: cls, mark, ExamNumber, topics } = req.body;
+    const {
+      subject,
+      teacher,
+      teacherSlug, // ✅ accept from request body
+      class: cls,
+      mark,
+      ExamNumber,
+      topics,
+    } = req.body;
 
-    // date is intentionally excluded — createdAt from timestamps is used instead
     if (!subject || !teacher || !cls || !mark || !ExamNumber || !topics) {
       return res.status(400).json({
         success: false,
@@ -80,12 +90,12 @@ export const createWeeklyExam = async (req, res) => {
       slug,
       subject,
       teacher,
+      teacherSlug: teacherSlug ?? null, // ✅ save teacher slug
       class: cls,
       mark: Number(mark),
       ExamNumber,
       topics,
       images,
-      // createdAt is set automatically by mongoose timestamps
     });
 
     res.status(201).json({ success: true, data: exam });

@@ -20,6 +20,13 @@ const weeklyExamSchema = new mongoose.Schema(
       required: [true, "Teacher name is required"],
       trim: true,
     },
+    // ✅ NEW — teacher's unique slug (e.g. T2601, P2601)
+    // used to filter exams by teacher on the dashboard
+    teacherSlug: {
+      type: String,
+      trim: true,
+      default: null,
+    },
     class: {
       type: String,
       required: [true, "Class is required"],
@@ -30,7 +37,6 @@ const weeklyExamSchema = new mongoose.Schema(
       required: [true, "Mark is required"],
       min: [1, "Mark must be at least 1"],
     },
-    // date field removed — use createdAt from timestamps instead
     ExamNumber: {
       type: String,
       required: [true, "Exam number is required"],
@@ -51,6 +57,9 @@ const weeklyExamSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+// index for fast slug-based filtering
+weeklyExamSchema.index({ teacherSlug: 1 });
 
 const WeeklyExam = mongoose.model("WeeklyExam", weeklyExamSchema);
 export default WeeklyExam;
