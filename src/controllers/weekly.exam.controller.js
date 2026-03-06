@@ -1,175 +1,177 @@
 // src/controllers/weekly.exam.controller.js
 import WeeklyExam from "../models/weekly.exam.model.js";
-import { uploadMultipleToCloudinary } from "../config/cloudinary.js";
-import dotenv from "dotenv";
-dotenv.config();
+import Teacher from "../models/teacher.model.js";
+import {
+  uploadMultipleToCloudinary,
+  deleteFromCloudinary,
+} from "../config/cloudinary.js";
 
-// ─── helpers ──────────────────────────────────────────────
-const generateSlug = ({ cls, ExamNumber }) =>
-  `weekly-exam-${ExamNumber}-${cls}`
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^\w\u0980-\u09FF-]/g, "")
-    .replace(/--+/g, "-")
-    .replace(/^-+|-+$/g, "");
+// ── helper: resolve teacherSlug from name if not provided ────────────────────
+const resolveTeacherSlug = async (rawSlug, teacherName) => {
+  if (rawSlug) return rawSlug;
+  if (!teacherName) return null;
+  const found = await Teacher.findOne({
+    name: { $regex: new RegExp(`^${teacherName.trim()}$`, "i") },
+  }).select("slug");
+  return found?.slug ?? null;
+};
 
-export const getAllWeeklyExams = async (req, res) => {
-  try {
-    const { teacherSlug } = req.query;
+// ── helper: build slug ────────────────────────────────────
+const buildSlug = (ExamNumber, cls, subject, teacherSlug) =>
+  `${ExamNumber}-${cls}-${subject}-${teacherSlug}`.replace(/\s+/g, "-");
 
-    const filter = teacherSlug ? { teacherSlug } : {};
-    const exams = await WeeklyExam.find(filter).sort({ createdAt: -1 });
+// ── auto-migration: runs on every GET, fixes any wrong/missing slugs ─────────
+const migrateMissingSlugs = async () => {
+  const docs = await WeeklyExam.find({});
 
-    res.status(200).json({ success: true, data: exams });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+  for (const doc of docs) {
+    try {
+      const teacherSlug =
+        doc.teacherSlug ?? (await resolveTeacherSlug(null, doc.teacher));
+      const correctSlug = buildSlug(
+        doc.ExamNumber,
+        doc.class,
+        doc.subject,
+        teacherSlug ?? doc._id.toString().slice(-4),
+      );
+
+      // only update if something is wrong
+      if (doc.slug !== correctSlug || doc.teacherSlug !== teacherSlug) {
+        await WeeklyExam.findByIdAndUpdate(doc._id, {
+          slug: correctSlug,
+          teacherSlug,
+        });
+      }
+    } catch (_) {}
   }
 };
 
-// ─── GET by slug ──────────────────────────────────────────
+// ── GET /api/weekly-exams ─────────────────────────────────
+export const getAllWeeklyExams = async (req, res) => {
+  try {
+    await migrateMissingSlugs();
+    const filter = {};
+    if (req.query.teacherSlug) {
+      filter.teacherSlug = req.query.teacherSlug;
+    }
+    const exams = await WeeklyExam.find(filter).sort({ createdAt: -1 });
+    return res.status(200).json(exams);
+  } catch (err) {
+    return res.status(500).json({ message: "Failed", error: err.message });
+  }
+};
+
+// ── GET /api/weekly-exams/:slug ───────────────────────────
 export const getWeeklyExamBySlug = async (req, res) => {
   try {
     const exam = await WeeklyExam.findOne({ slug: req.params.slug });
-    if (!exam)
-      return res
-        .status(404)
-        .json({ success: false, message: "Exam not found" });
-    res.status(200).json({ success: true, data: exam });
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+    return res.status(200).json(exam);
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({ message: "Failed", error: err.message });
   }
 };
 
-// ─── POST create ──────────────────────────────────────────
+// ── POST /api/weekly-exams ────────────────────────────────
 export const createWeeklyExam = async (req, res) => {
   try {
-    const {
+    let {
       subject,
       teacher,
-      teacherSlug, // ✅ accept from request body
+      teacherSlug: rawSlug,
       class: cls,
       mark,
       ExamNumber,
       topics,
     } = req.body;
 
-    if (!subject || !teacher || !cls || !mark || !ExamNumber || !topics) {
-      return res.status(400).json({
-        success: false,
-        message: "All fields are required",
-        received: { subject, teacher, class: cls, mark, ExamNumber, topics },
-      });
+    // resolve teacherSlug; if teacher name is empty, look it up from slug
+    const teacherSlug = await resolveTeacherSlug(rawSlug, teacher);
+    if (!teacher?.trim() && teacherSlug) {
+      const found = await Teacher.findOne({ slug: teacherSlug }).select("name");
+      if (found) teacher = found.name;
     }
 
-    if (topics.trim().length < 20) {
-      return res.status(400).json({
-        success: false,
-        message: "Topics must be at least 20 characters",
-      });
-    }
-
-    // Upload images if provided
+    // upload images
     let images = [];
-    if (req.files && req.files.length > 0) {
-      const uploaded = await uploadMultipleToCloudinary(
+    if (req.files?.length) {
+      const uploadResults = await uploadMultipleToCloudinary(
         req.files,
         "weekly-exams",
       );
-      images = uploaded.map((r) => ({
-        imageUrl: r.secure_url,
-        publicId: r.public_id,
-      }));
+      images = uploadResults.map((r) => r.secure_url);
     }
 
-    // Generate unique slug
-    let slug = generateSlug({ cls, ExamNumber });
-    const existing = await WeeklyExam.findOne({ slug });
-    if (existing) slug = `${slug}-${Date.now().toString(36)}`;
+    const slug = buildSlug(ExamNumber, cls, subject, teacherSlug ?? "unknown");
 
     const exam = await WeeklyExam.create({
-      slug,
       subject,
       teacher,
-      teacherSlug: teacherSlug ?? null, // ✅ save teacher slug
+      teacherSlug,
       class: cls,
       mark: Number(mark),
       ExamNumber,
       topics,
       images,
+      slug,
     });
 
-    res.status(201).json({ success: true, data: exam });
+    return res.status(201).json(exam);
   } catch (err) {
-    if (err.code === 11000)
-      return res
-        .status(409)
-        .json({ success: false, message: "Duplicate exam entry" });
-    res.status(500).json({ success: false, message: err.message });
+    console.error("createWeeklyExam error:", err);
+    return res.status(500).json({ message: "Failed", error: err.message });
   }
 };
 
-// ─── PUT update ───────────────────────────────────────────
+// ── PUT /api/weekly-exams/:id ─────────────────────────────
 export const updateWeeklyExam = async (req, res) => {
   try {
-    const { class: cls, ExamNumber } = req.body;
+    const { id } = req.params;
+    const {
+      subject,
+      teacher,
+      teacherSlug: rawSlug,
+      class: cls,
+      mark,
+      ExamNumber,
+      topics,
+    } = req.body;
 
-    if (cls || ExamNumber) {
-      const current = await WeeklyExam.findById(req.params.id);
-      if (!current)
-        return res
-          .status(404)
-          .json({ success: false, message: "Exam not found" });
+    const teacherSlug = await resolveTeacherSlug(rawSlug, teacher);
 
-      req.body.slug = generateSlug({
-        cls: cls || current.class,
-        ExamNumber: ExamNumber || current.ExamNumber,
-      });
-    }
+    const update = {
+      ...(subject && { subject }),
+      ...(teacher && { teacher }),
+      ...(teacherSlug !== undefined && { teacherSlug }),
+      ...(cls && { class: cls }),
+      ...(mark && { mark: Number(mark) }),
+      ...(ExamNumber && { ExamNumber }),
+      ...(topics && { topics }),
+    };
 
-    // Upload new images if provided
-    if (req.files && req.files.length > 0) {
-      const uploaded = await uploadMultipleToCloudinary(
+    if (req.files?.length) {
+      const uploadResults = await uploadMultipleToCloudinary(
         req.files,
         "weekly-exams",
       );
-      req.body.images = uploaded.map((r) => ({
-        imageUrl: r.secure_url,
-        publicId: r.public_id,
-      }));
+      update.images = uploadResults.map((r) => r.secure_url);
     }
 
-    const exam = await WeeklyExam.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    });
-
-    if (!exam)
-      return res
-        .status(404)
-        .json({ success: false, message: "Exam not found" });
-
-    res.status(200).json({ success: true, data: exam });
+    const exam = await WeeklyExam.findByIdAndUpdate(id, update, { new: true });
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+    return res.status(200).json(exam);
   } catch (err) {
-    if (err.code === 11000)
-      return res
-        .status(409)
-        .json({ success: false, message: "Slug conflict on update" });
-    res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({ message: "Failed", error: err.message });
   }
 };
 
-// ─── DELETE ───────────────────────────────────────────────
+// ── DELETE /api/weekly-exams/:id ──────────────────────────
 export const deleteWeeklyExam = async (req, res) => {
   try {
     const exam = await WeeklyExam.findByIdAndDelete(req.params.id);
-    if (!exam)
-      return res
-        .status(404)
-        .json({ success: false, message: "Exam not found" });
-    res
-      .status(200)
-      .json({ success: true, message: "Exam deleted successfully" });
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
+    return res.status(200).json({ message: "Deleted successfully" });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({ message: "Failed", error: err.message });
   }
 };
