@@ -1,8 +1,6 @@
 // src/controllers/weekly.exam.controller.js
 import WeeklyExam from "../models/weekly.exam.model.js";
 import { uploadMultipleToCloudinary } from "../config/cloudinary.js";
-
-// weekly.exam.controller.js — very top
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -42,37 +40,14 @@ export const getWeeklyExamBySlug = async (req, res) => {
 // ─── POST create ──────────────────────────────────────────
 export const createWeeklyExam = async (req, res) => {
   try {
-    const {
-      subject,
-      teacher,
-      class: cls,
-      mark,
-      date,
-      ExamNumber,
-      topics,
-    } = req.body;
+    const { subject, teacher, class: cls, mark, ExamNumber, topics } = req.body;
 
-    if (
-      !subject ||
-      !teacher ||
-      !cls ||
-      !mark ||
-      !date ||
-      !ExamNumber ||
-      !topics
-    ) {
+    // date is intentionally excluded — createdAt from timestamps is used instead
+    if (!subject || !teacher || !cls || !mark || !ExamNumber || !topics) {
       return res.status(400).json({
         success: false,
         message: "All fields are required",
-        received: {
-          subject,
-          teacher,
-          class: cls,
-          mark,
-          date,
-          ExamNumber,
-          topics,
-        },
+        received: { subject, teacher, class: cls, mark, ExamNumber, topics },
       });
     }
 
@@ -107,10 +82,10 @@ export const createWeeklyExam = async (req, res) => {
       teacher,
       class: cls,
       mark: Number(mark),
-      date,
       ExamNumber,
       topics,
       images,
+      // createdAt is set automatically by mongoose timestamps
     });
 
     res.status(201).json({ success: true, data: exam });

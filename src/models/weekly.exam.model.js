@@ -30,11 +30,7 @@ const weeklyExamSchema = new mongoose.Schema(
       required: [true, "Mark is required"],
       min: [1, "Mark must be at least 1"],
     },
-    date: {
-      type: String,
-      required: [true, "Date is required"],
-      trim: true,
-    },
+    // date field removed — use createdAt from timestamps instead
     ExamNumber: {
       type: String,
       required: [true, "Exam number is required"],

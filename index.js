@@ -14,12 +14,11 @@ dotenv.config();
 import express from "express";
 import corsMiddleware from "./src/middleware/corsMiddleware.js";
 import connectDB from "./src/config/db.js";
-import categoryRoutes from "./src/router/category.routes.js";
-import articleRoutes from "./src/router/article.routes.js";
 import photographyRoutes from "./src/router/photography.routes.js";
 import quoteRoutes from "./src/router/quotes.routes.js";
 import heroRoutes from "./src/router/hero.routes.js";
 import weeklyExamRoutes from "./src/router/weekly.exam.router.js";
+import teacherProfileRoutes from "./src/router/teacher.profile.routes.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -44,13 +43,12 @@ connectDB();
 
 // ======================
 // Routes
-app.use("/api/categories", categoryRoutes);
-app.use("/api/articles", articleRoutes);
 app.use("/api/photography", photographyRoutes);
 app.use("/api/quotes", quoteRoutes);
 app.use("/api/heroes", heroRoutes);
 
 app.use("/api/weekly-exams", weeklyExamRoutes);
+app.use("/api/teacher", teacherProfileRoutes);
 
 // ======================
 
