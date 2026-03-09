@@ -11,7 +11,8 @@ const COOKIE_OPTS = {
   maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
 };
 
-// ─── Hardcoded admin (same as teacher controller) ─────────────────────────────
+// ─── Single source of truth for hardcoded admin ───────────────────────────────
+// ⚠️  Keep this in sync with teacher.controller.js
 const HARDCODED_ADMIN = {
   _id: "hardcoded-admin",
   name: "Super Admin",
@@ -19,7 +20,7 @@ const HARDCODED_ADMIN = {
   role: "admin",
   password: "admin",
   isHardcoded: true,
-  slug: "A2601",
+  slug: "X666X", // must match teacher.controller.js
 };
 
 // ── POST /api/auth/login ──────────────────────────────────────────────────────
@@ -33,20 +34,20 @@ export const login = async (req, res) => {
 
     let userPayload;
 
-    // hardcoded admin check
     if (
       email.toLowerCase() === HARDCODED_ADMIN.email &&
       password === HARDCODED_ADMIN.password
     ) {
+      // ✅ isHardcoded goes into the JWT so /me can return it
       userPayload = {
         id: HARDCODED_ADMIN._id,
         email: HARDCODED_ADMIN.email,
         name: HARDCODED_ADMIN.name,
         role: HARDCODED_ADMIN.role,
         slug: HARDCODED_ADMIN.slug,
+        isHardcoded: true,
       };
     } else {
-      // DB check
       const teacher = await Teacher.findOne({ email: email.toLowerCase() });
       if (!teacher || teacher.password !== password)
         return res.status(401).json({ message: "Invalid credentials" });
@@ -57,13 +58,11 @@ export const login = async (req, res) => {
         name: teacher.name,
         role: teacher.role,
         slug: teacher.slug ?? "",
+        isHardcoded: false,
       };
     }
 
-    // sign JWT
     const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: "7d" });
-
-    // set httpOnly cookie
     res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
 
     return res.status(200).json({ success: true, user: userPayload });
@@ -80,8 +79,8 @@ export const me = async (req, res) => {
 
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // Always return fresh data from DB (except hardcoded admin)
-    if (decoded.id === "hardcoded-admin") {
+    // Hardcoded admin — return directly, no DB call needed
+    if (decoded.id === HARDCODED_ADMIN._id) {
       return res.status(200).json({
         user: {
           id: HARDCODED_ADMIN._id,
@@ -89,10 +88,12 @@ export const me = async (req, res) => {
           name: HARDCODED_ADMIN.name,
           role: HARDCODED_ADMIN.role,
           slug: HARDCODED_ADMIN.slug,
+          isHardcoded: true, // ✅ always present
         },
       });
     }
 
+    // DB user — fetch fresh data
     const teacher = await Teacher.findById(decoded.id).select("-password");
     if (!teacher) return res.status(401).json({ message: "User not found" });
 
@@ -103,10 +104,10 @@ export const me = async (req, res) => {
         name: teacher.name,
         role: teacher.role,
         slug: teacher.slug ?? "",
+        isHardcoded: false,
       },
     });
   } catch (err) {
-    // jwt expired or invalid
     res.clearCookie(COOKIE_NAME);
     return res.status(401).json({ message: "Invalid or expired session" });
   }
