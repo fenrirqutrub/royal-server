@@ -14,13 +14,14 @@ import express from "express";
 import cookieParser from "cookie-parser";
 import corsMiddleware from "./src/middleware/corsMiddleware.js";
 import connectDB from "./src/config/db.js";
-
 import authRoutes from "./src/router/auth.routes.js";
 import photographyRoutes from "./src/router/photography.routes.js";
 import quoteRoutes from "./src/router/quotes.routes.js";
 import heroRoutes from "./src/router/hero.routes.js";
 import weeklyExamRoutes from "./src/router/weekly.exam.routes.js";
 import teacherProfileRoutes from "./src/router/teacher.routes.js";
+import dailyLessonRoutes from "./src/router/daily.lesson.routes.js";
+import noticeRoutes from "./src/router/notice.routes.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -47,6 +48,8 @@ app.use("/api/quotes", quoteRoutes);
 app.use("/api/heroes", heroRoutes);
 app.use("/api/weekly-exams", weeklyExamRoutes);
 app.use("/api/teachers", teacherProfileRoutes);
+app.use("/api/daily-lesson", dailyLessonRoutes);
+app.use("/api/notices", noticeRoutes);
 
 // ── health check ──────────────────────────────────────────────────────────────
 app.get("/", (req, res) =>
