@@ -82,14 +82,6 @@ const getBanglaDay = (val) => {
   return BANGLA_DAYS[toD(val).getDay()];
 };
 
-// ── Tokenise mixed Bangla/English text ───────────────────────────────────────
-/**
- * Splits a string into segments tagged as 'bangla' or 'english'.
- * Spaces and punctuation inherit the preceding segment's script (default: bangla).
- *
- * "বাংলা কবিতা (Bangla Kobita) – বাংলার"
- * → [{script:'bangla', text:'বাংলা কবিতা ('}, {script:'english', text:'Bangla Kobita'}, ...]
- */
 const tokeniseMixed = (text) => {
   const segments = [];
   let current = "";
@@ -155,11 +147,6 @@ const drawMixedInline = (doc, text, startX, y, fonts, fontSize, opts = {}) => {
   return drawX;
 };
 
-// ── Draw mixed text block with word-wrap ──────────────────────────────────────
-/**
- * Renders a long mixed-script paragraph with automatic word wrap.
- * Returns the Y position after the last rendered line.
- */
 const drawMixedBlock = (doc, text, x, y, fonts, fontSize, opts = {}) => {
   const {
     blockWidth = 400,
