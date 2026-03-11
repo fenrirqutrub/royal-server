@@ -65,6 +65,10 @@ export const getActiveNotice = async (req, res) => {
 
     res.status(200).json({ data: notice || null });
   } catch (err) {
+    console.error("getNoticePdf error:", err); // ← full error দেখুন
+    res
+      .status(500)
+      .json({ message: "Failed to generate PDF.", error: err.message });
     console.error("getActiveNotice error:", err);
     res.status(500).json({ message: "Internal server error." });
   }

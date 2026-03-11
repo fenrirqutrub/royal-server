@@ -11,9 +11,9 @@ import {
 const router = express.Router();
 
 router.post("/", createNotice);
-router.get("/active", getActiveNotice); // ← must be BEFORE /:slug
+router.get("/active", getActiveNotice);
 router.get("/", getAllNotices);
-router.get("/:slug/pdf", getNoticePdf); // ← PDF stream
+router.get("/:slug/pdf", getNoticePdf);
 router.delete("/:slug", deleteNotice);
 
 export default router;
