@@ -279,19 +279,6 @@ const drawBorders = (doc, W, H, mm) => {
     .lineWidth(2.5)
     .strokeColor("#1a1a1a")
     .stroke();
-  doc
-    .rect(mm(11), mm(11), W - mm(22), H - mm(22))
-    .lineWidth(0.6)
-    .strokeColor("#555555")
-    .stroke();
-  [
-    [mm(8), mm(8)],
-    [W - mm(8), mm(8)],
-    [mm(8), H - mm(8)],
-    [W - mm(8), H - mm(8)],
-  ].forEach(([cx, cy]) => {
-    doc.circle(cx, cy, mm(2)).lineWidth(1).fillAndStroke("#f5c542", "#333333");
-  });
 };
 
 // ── Header section ────────────────────────────────────────────────────────────
@@ -319,7 +306,7 @@ const drawHeader = (doc, notice, W, mm, fonts) => {
       align: "center",
       width: W,
       color: "#111111",
-      fontSize: 24,
+      fontSize: 25,
     },
   );
 
@@ -329,10 +316,11 @@ const drawHeader = (doc, notice, W, mm, fonts) => {
     0,
     mm(26),
     fonts,
-    11,
+    15,
     {
-      color: "#444444",
+      color: "#111111",
       align: "center",
+      fontSize: 18,
       width: W,
     },
   );
@@ -348,7 +336,7 @@ const drawHeader = (doc, notice, W, mm, fonts) => {
       width: W,
       color: "#111111",
       strokeW: 0.3,
-      fontSize: 16,
+      fontSize: 20,
     },
   );
 };
@@ -363,7 +351,7 @@ const drawMetaRow = (doc, notice, W, mm, fonts) => {
     mm(18),
     rowY,
     fonts,
-    11,
+    15,
     {
       color: "#111111",
     },
@@ -374,7 +362,7 @@ const drawMetaRow = (doc, notice, W, mm, fonts) => {
     0,
     rowY,
     fonts,
-    11,
+    15,
     {
       color: "#111111",
       align: "right",
@@ -402,7 +390,7 @@ const drawBody = (doc, notice, W, mm, fonts) => {
   const fullText =
     "এতদ্বারা সকলের অবগতির জন্য জানানো যাইতেছে যে, " + notice.notice;
 
-  drawMixedBlock(doc, fullText, mm(20), mm(80), fonts, 14, {
+  drawMixedBlock(doc, fullText, mm(20), mm(80), fonts, 15, {
     blockWidth: W - mm(40),
     lineHeight: 28,
     color: "#111111",
@@ -412,109 +400,106 @@ const drawBody = (doc, notice, W, mm, fonts) => {
 
 // ── Signature block ───────────────────────────────────────────────────────────
 const drawSignature = (doc, notice, W, H, mm, fonts) => {
-  const sigW = mm(72);
+  const sigW = mm(80);
   const sigX = W - mm(18) - sigW;
-  let sigY = H - mm(58);
-  const lineGap = mm(8);
+  let sigY = H - mm(62);
+  const lineGap = mm(7);
+  const fontSize = 15;
 
   drawBoldMixed(doc, notice.signatureName || "যোগাযোগঃ", sigX, sigY, fonts, {
     width: sigW,
     align: "right",
     color: "#111111",
     strokeW: 0.3,
-    fontSize: 12,
+    fontSize: fontSize,
   });
   sigY += lineGap;
 
-  drawMixedInline(
+  drawBoldMixed(
     doc,
-    notice.academyName || "রয়েল একাডেমি",
+    notice.academyName || "রয়েল একাডেমি, বেলকুচি",
     sigX,
     sigY,
     fonts,
-    11,
-    { color: "#333333", align: "right", width: sigW },
+    {
+      width: sigW,
+      align: "right",
+      color: "#333333",
+      strokeW: 0.25,
+      fontSize: fontSize,
+    },
   );
   sigY += lineGap;
 
   drawMixedInline(
     doc,
-    notice.subTitle || "বেলকুচি, সিরাজগঞ্জ",
+    notice.subTitle || "মুকুন্দগাতী বাজার, বেলকুচি, সিরাজগঞ্জ",
     sigX,
     sigY,
     fonts,
-    11,
+    fontSize,
     { color: "#555555", align: "right", width: sigW },
   );
   sigY += lineGap;
 
-  drawMixedInline(doc, "মোবাইলঃ", sigX, sigY, fonts, 11, {
+  drawMixedInline(doc, "মোবাইলঃ", sigX, sigY, fonts, fontSize, {
     color: "#333333",
     align: "right",
     width: sigW,
   });
   sigY += lineGap;
 
-  drawMixedInline(doc, notice.phone1 || "০১৬৫০-০৩৩১৮১", sigX, sigY, fonts, 11, {
-    color: "#333333",
-    align: "right",
-    width: sigW,
-  });
+  drawMixedInline(
+    doc,
+    notice.phone1 || "০১৬৫০-০৩৩১৮১",
+    sigX,
+    sigY,
+    fonts,
+    fontSize,
+    {
+      color: "#333333",
+      align: "right",
+      width: sigW,
+    },
+  );
   sigY += lineGap;
 
-  drawMixedInline(doc, notice.phone2 || "০১৮০৪-৫৫৮২২৬", sigX, sigY, fonts, 11, {
-    color: "#333333",
-    align: "right",
-    width: sigW,
-  });
+  drawMixedInline(
+    doc,
+    notice.phone2 || "০১৮০৪-৫৫৮২২৬",
+    sigX,
+    sigY,
+    fonts,
+    fontSize,
+    {
+      color: "#333333",
+      align: "right",
+      width: sigW,
+    },
+  );
 };
 
 // ── Footer ────────────────────────────────────────────────────────────────────
 const drawFooter = (doc, notice, W, H, mm, fonts) => {
   doc
-    .moveTo(mm(15), H - mm(14))
-    .lineTo(W - mm(15), H - mm(14))
-    .lineWidth(0.5)
-    .strokeColor("#cccccc")
-    .stroke();
-
-  doc
     .font(fonts.english)
     .fontSize(8)
-    .fillColor("#aaaaaa")
+    .fillColor("#d4d4d4")
     .text(
       `Ref: ${notice.noticeSlug}   ·   Issued: ${fmtDate(notice.createdAt)}   ·   Valid Until: ${fmtDate(notice.expiresAt)}`,
       0,
-      H - mm(10),
+      H - mm(6),
       { align: "center", width: W },
     );
 };
 
-// ── Main export ───────────────────────────────────────────────────────────────
-/**
- * Generate a branded Royal Academy notice PDF as a Buffer.
- *
- * @param {{
- *   noticeSlug: string,
- *   notice: string,
- *   createdAt: Date|string,
- *   expiresAt: Date|string,
- *   signatureName?: string,
- *   phone1?: string,
- *   phone2?: string,
- *   academyName?: string,
- *   subTitle?: string,
- *   noticeHeading?: string,
- * }} notice
- * @returns {Promise<Buffer>}
- */
 export const generateNoticePdf = (notice) => {
   return new Promise((resolve, reject) => {
     try {
       const fonts = resolveFonts();
 
       const doc = new PDFDocument({
-        size: "A4",
+        size: [595.28, 841.89], // ← explicit A4 in points
         margins: { top: 0, bottom: 0, left: 0, right: 0 },
         info: {
           Title: notice.noticeSlug || "Notice",
