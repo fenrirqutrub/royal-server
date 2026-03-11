@@ -10,43 +10,30 @@ const FONTS_DIR = path.join(__dirname, "../../fonts");
 
 // ── Resolve font paths ────────────────────────────────────────────────────────
 const resolveFonts = () => {
-  // Priority: env var → Hind Siliguri → SutonnyOMJ → pdfkit built-in
-  const candidates = {
-    regular: [
-      process.env.BANGLA_FONT_REGULAR,
-      path.join(FONTS_DIR, "HindSiliguri-Regular.ttf"),
-      path.join(FONTS_DIR, "NotoSansBengali-Regular.ttf"),
-      path.join(FONTS_DIR, "SutonnyOMJ.ttf"),
-    ].filter(Boolean),
+  const banglaPath = path.join(FONTS_DIR, "SutonnyOMJ.ttf");
+  const englishPath = path.join(FONTS_DIR, "times.ttf");
 
-    bold: [
-      process.env.BANGLA_FONT_BOLD,
-      path.join(FONTS_DIR, "HindSiliguri-Bold.ttf"),
-      path.join(FONTS_DIR, "NotoSansBengali-Bold.ttf"),
-      // no SutonnyOMJ bold — will simulate
-    ].filter(Boolean),
-  };
-
-  const regularFont = candidates.regular.find((p) => fs.existsSync(p)) || null;
-  const boldFont = candidates.bold.find((p) => fs.existsSync(p)) || null;
-
-  if (!regularFont) {
+  if (!fs.existsSync(banglaPath)) {
     throw new Error(
-      `No Bangla font found. Place HindSiliguri-Regular.ttf in ${FONTS_DIR}/\n` +
-        `Download: https://fonts.google.com/specimen/Hind+Siliguri`,
+      `SutonnyOMJ font not found. Place SutonnyOMJ.ttf in ${FONTS_DIR}/`,
+    );
+  }
+  if (!fs.existsSync(englishPath)) {
+    throw new Error(
+      `Times New Roman font not found. Place times.ttf in ${FONTS_DIR}/`,
     );
   }
 
-  return {
-    regular: regularFont,
-    bold: boldFont || regularFont,
-    simulateBold: !boldFont,
-  };
+  return { bangla: banglaPath, english: englishPath };
 };
 
 // ── Logo path ─────────────────────────────────────────────────────────────────
 const LOGO_PATH =
   process.env.NOTICE_LOGO_PATH || path.join(__dirname, "../../Public/logo.png");
+
+// ── Bangla digit converter ────────────────────────────────────────────────────
+const toBanglaDigits = (num) =>
+  String(num).replace(/[0-9]/g, (d) => "০১২৩৪৫৬৭৮৯"[d]);
 
 // ── Bangla date helpers ───────────────────────────────────────────────────────
 const BANGLA_DAYS = [
@@ -58,7 +45,6 @@ const BANGLA_DAYS = [
   "শুক্রবার",
   "শনিবার",
 ];
-
 const BANGLA_MONTHS = [
   "জানুয়ারি",
   "ফেব্রুয়ারি",
@@ -76,19 +62,10 @@ const BANGLA_MONTHS = [
 
 const toD = (val) => (val instanceof Date ? val : new Date(val));
 
-const fmtBanglaDate = (val) => {
-  if (!val) return "N/A";
-  const d = toD(val);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  return `${dd}-${mm}-${yyyy} ইং`;
-};
-
 const fmtBanglaDateLong = (val) => {
   if (!val) return "N/A";
   const d = toD(val);
-  return `${d.getDate()} ${BANGLA_MONTHS[d.getMonth()]} ${d.getFullYear()} ইং`;
+  return `${toBanglaDigits(d.getDate())} ${BANGLA_MONTHS[d.getMonth()]} ${toBanglaDigits(d.getFullYear())} ইং`;
 };
 
 const fmtDate = (val) => {
@@ -105,260 +82,395 @@ const getBanglaDay = (val) => {
   return BANGLA_DAYS[toD(val).getDay()];
 };
 
-// ── Bold simulation helper ────────────────────────────────────────────────────
-// When no bold font is available, draws text twice with a thin stroke
-// to mimic bold weight. Works with any single-weight font.
-const drawBold = (doc, text, x, y, opts = {}) => {
-  const { color = "#111111", strokeW = 0.35, ...rest } = opts;
+// ── Tokenise mixed Bangla/English text ───────────────────────────────────────
+/**
+ * Splits a string into segments tagged as 'bangla' or 'english'.
+ * Spaces and punctuation inherit the preceding segment's script (default: bangla).
+ *
+ * "বাংলা কবিতা (Bangla Kobita) – বাংলার"
+ * → [{script:'bangla', text:'বাংলা কবিতা ('}, {script:'english', text:'Bangla Kobita'}, ...]
+ */
+const tokeniseMixed = (text) => {
+  const segments = [];
+  let current = "";
+  let currentScript = null;
 
-  // Fill pass
-  doc
-    .save()
-    .fillColor(color)
-    .text(text, x, y, { ...rest, fill: true, stroke: false })
-    .restore();
+  for (const ch of text) {
+    let chScript;
+    if (/[\u0980-\u09FF]/.test(ch)) {
+      chScript = "bangla";
+    } else if (/[A-Za-z]/.test(ch)) {
+      chScript = "english";
+    } else {
+      // digits, spaces, punctuation → inherit current script
+      chScript = currentScript || "bangla";
+    }
 
-  // Stroke pass — repositions cursor back before drawing
-  doc
-    .save()
-    .lineWidth(strokeW)
-    .strokeColor(color)
-    .fillColor(color)
-    .text(text, x, y, { ...rest, fill: true, stroke: true })
-    .restore();
+    if (chScript !== currentScript && current !== "") {
+      segments.push({ script: currentScript, text: current });
+      current = "";
+    }
+    currentScript = chScript;
+    current += ch;
+  }
+  if (current)
+    segments.push({ script: currentScript || "bangla", text: current });
+  return segments;
+};
+
+// ── Measure mixed text width ──────────────────────────────────────────────────
+const measureMixed = (doc, text, fonts, fontSize) => {
+  let total = 0;
+  for (const seg of tokeniseMixed(text)) {
+    doc
+      .font(seg.script === "english" ? fonts.english : fonts.bangla)
+      .fontSize(fontSize);
+    total += doc.widthOfString(seg.text);
+  }
+  return total;
+};
+
+// ── Draw mixed text inline (no automatic line-break) ─────────────────────────
+const drawMixedInline = (doc, text, startX, y, fonts, fontSize, opts = {}) => {
+  const { color = "#111111", width: maxWidth, align } = opts;
+  const segments = tokeniseMixed(text);
+
+  const totalWidth = measureMixed(doc, text, fonts, fontSize);
+  let drawX = startX;
+  if (align === "center" && maxWidth != null)
+    drawX = startX + (maxWidth - totalWidth) / 2;
+  else if (align === "right" && maxWidth != null)
+    drawX = startX + maxWidth - totalWidth;
+
+  for (const seg of segments) {
+    const font = seg.script === "english" ? fonts.english : fonts.bangla;
+    doc
+      .font(font)
+      .fontSize(fontSize)
+      .fillColor(color)
+      .text(seg.text, drawX, y, { lineBreak: false });
+    doc.font(font).fontSize(fontSize);
+    drawX += doc.widthOfString(seg.text);
+  }
+  return drawX;
+};
+
+// ── Draw mixed text block with word-wrap ──────────────────────────────────────
+/**
+ * Renders a long mixed-script paragraph with automatic word wrap.
+ * Returns the Y position after the last rendered line.
+ */
+const drawMixedBlock = (doc, text, x, y, fonts, fontSize, opts = {}) => {
+  const {
+    blockWidth = 400,
+    lineHeight = fontSize * 1.9,
+    color = "#111111",
+    align = "left",
+  } = opts;
+
+  // Split into word-level tokens preserving whitespace runs
+  const rawWords = text.split(/(\s+)/);
+  let lineSegs = []; // segments accumulated for the current line
+  let lineWidth = 0;
+  let curY = y;
+
+  const flushLine = () => {
+    if (lineSegs.length === 0) return;
+    let totalW = 0;
+    for (const seg of lineSegs) {
+      doc
+        .font(seg.script === "english" ? fonts.english : fonts.bangla)
+        .fontSize(fontSize);
+      totalW += doc.widthOfString(seg.text);
+    }
+    let drawX = x;
+    if (align === "center") drawX = x + (blockWidth - totalW) / 2;
+    else if (align === "right") drawX = x + blockWidth - totalW;
+
+    for (const seg of lineSegs) {
+      const font = seg.script === "english" ? fonts.english : fonts.bangla;
+      doc
+        .font(font)
+        .fontSize(fontSize)
+        .fillColor(color)
+        .text(seg.text, drawX, curY, { lineBreak: false });
+      doc.font(font).fontSize(fontSize);
+      drawX += doc.widthOfString(seg.text);
+    }
+    curY += lineHeight;
+    lineSegs = [];
+    lineWidth = 0;
+  };
+
+  for (const word of rawWords) {
+    if (word === "") continue;
+
+    const wordSegs = tokeniseMixed(word);
+    let wordWidth = 0;
+    for (const seg of wordSegs) {
+      doc
+        .font(seg.script === "english" ? fonts.english : fonts.bangla)
+        .fontSize(fontSize);
+      wordWidth += doc.widthOfString(seg.text);
+    }
+
+    // Wrap if adding this word would exceed blockWidth (but never wrap empty lines)
+    if (lineWidth > 0 && lineWidth + wordWidth > blockWidth) {
+      flushLine();
+    }
+
+    lineSegs.push(...wordSegs);
+    lineWidth += wordWidth;
+  }
+  flushLine(); // last line
+  return curY;
+};
+
+// ── Bold simulation (mixed-script aware) ─────────────────────────────────────
+const drawBoldMixed = (doc, text, x, y, fonts, opts = {}) => {
+  const {
+    color = "#111111",
+    strokeW = 0.35,
+    fontSize = 12,
+    width: maxWidth,
+    align,
+  } = opts;
+  const segments = tokeniseMixed(text);
+
+  const totalWidth = measureMixed(doc, text, fonts, fontSize);
+  let drawX = x;
+  if (align === "center" && maxWidth != null)
+    drawX = x + (maxWidth - totalWidth) / 2;
+  else if (align === "right" && maxWidth != null)
+    drawX = x + maxWidth - totalWidth;
+
+  for (const seg of segments) {
+    const font = seg.script === "english" ? fonts.english : fonts.bangla;
+
+    // Fill pass
+    doc
+      .save()
+      .font(font)
+      .fontSize(fontSize)
+      .fillColor(color)
+      .text(seg.text, drawX, y, { lineBreak: false, fill: true, stroke: false })
+      .restore();
+
+    // Stroke pass (bold simulation)
+    doc
+      .save()
+      .font(font)
+      .fontSize(fontSize)
+      .lineWidth(strokeW)
+      .strokeColor(color)
+      .fillColor(color)
+      .text(seg.text, drawX, y, { lineBreak: false, fill: true, stroke: true })
+      .restore();
+
+    doc.font(font).fontSize(fontSize);
+    drawX += doc.widthOfString(seg.text);
+  }
 };
 
 // ── Decorative border helper ──────────────────────────────────────────────────
 const drawBorders = (doc, W, H, mm) => {
-  // Outer border
   doc
     .rect(mm(8), mm(8), W - mm(16), H - mm(16))
     .lineWidth(2.5)
     .strokeColor("#1a1a1a")
     .stroke();
-
-  // Inner border (double border effect)
   doc
     .rect(mm(11), mm(11), W - mm(22), H - mm(22))
     .lineWidth(0.6)
     .strokeColor("#555555")
     .stroke();
-
-  // Corner ornaments
-  const corners = [
+  [
     [mm(8), mm(8)],
     [W - mm(8), mm(8)],
     [mm(8), H - mm(8)],
     [W - mm(8), H - mm(8)],
-  ];
-  corners.forEach(([cx, cy]) => {
+  ].forEach(([cx, cy]) => {
     doc.circle(cx, cy, mm(2)).lineWidth(1).fillAndStroke("#f5c542", "#333333");
   });
 };
 
 // ── Header section ────────────────────────────────────────────────────────────
-const drawHeader = (doc, notice, W, mm, fonts, simulateBold) => {
-  const hasLogo = fs.existsSync(LOGO_PATH);
-  const logoSize = mm(26);
-  const logoX = mm(18);
-  const logoY = mm(14);
-
-  if (hasLogo) {
+const drawHeader = (doc, notice, W, mm, fonts) => {
+  if (fs.existsSync(LOGO_PATH)) {
     try {
-      doc.image(LOGO_PATH, logoX, logoY, {
-        width: logoSize,
-        height: logoSize,
-        fit: [logoSize, logoSize],
+      const s = mm(26);
+      doc.image(LOGO_PATH, mm(18), mm(14), {
+        width: s,
+        height: s,
+        fit: [s, s],
       });
     } catch {
-      // logo load failed — skip silently
+      /* skip */
     }
   }
 
-  // Academy name
-  const academyName = notice.academyName || "রেয়েল একাডেমি, বেলকুচি";
-  doc.font(fonts.bold).fontSize(24).fillColor("#111111");
-
-  if (simulateBold) {
-    drawBold(doc, academyName, 0, mm(16), {
+  drawBoldMixed(
+    doc,
+    notice.academyName || "রয়েল একাডেমি, বেলকুচি",
+    0,
+    mm(16),
+    fonts,
+    {
       align: "center",
       width: W,
       color: "#111111",
-    });
-  } else {
-    doc.text(academyName, 0, mm(16), { align: "center", width: W });
-  }
+      fontSize: 24,
+    },
+  );
 
-  // Sub-title line (address / tagline)
-  const subTitle = notice.subTitle || "বেলকুচি, সিরাজগঞ্জ";
-  doc
-    .font(fonts.regular)
-    .fontSize(11)
-    .fillColor("#444444")
-    .text(subTitle, 0, mm(26), { align: "center", width: W });
+  drawMixedInline(
+    doc,
+    notice.subTitle || "মুকুন্দগাতী বাজার, বেলকুচি, সিরাজগঞ্জ",
+    0,
+    mm(26),
+    fonts,
+    11,
+    {
+      color: "#444444",
+      align: "center",
+      width: W,
+    },
+  );
 
-  // Notice heading banner
-  const noticeHeading = notice.noticeHeading || "জরুরি বিজ্ঞপ্তি";
-  const bannerY = mm(33);
-  const bannerH = mm(11);
-
-  // Banner background
-  doc.rect(mm(15), bannerY - mm(1.5), W - mm(30), bannerH).fill("#f5c542");
-
-  // Banner text
-  doc.font(fonts.bold).fontSize(16).fillColor("#111111");
-  if (simulateBold) {
-    drawBold(doc, noticeHeading, 0, bannerY + mm(1), {
+  drawBoldMixed(
+    doc,
+    notice.noticeHeading || "জরুরি বিজ্ঞপ্তি",
+    0,
+    mm(35) + mm(1),
+    fonts,
+    {
       align: "center",
       width: W,
       color: "#111111",
       strokeW: 0.3,
-    });
-  } else {
-    doc.text(noticeHeading, 0, bannerY + mm(1), { align: "center", width: W });
-  }
-
-  // Divider below banner
-  doc
-    .moveTo(mm(15), mm(46))
-    .lineTo(W - mm(15), mm(46))
-    .lineWidth(1)
-    .strokeColor("#222222")
-    .stroke();
+      fontSize: 16,
+    },
+  );
 };
 
 // ── Date / Reference row ──────────────────────────────────────────────────────
-const drawMetaRow = (doc, notice, W, mm, fonts, simulateBold) => {
-  const rowY = mm(50);
+const drawMetaRow = (doc, notice, W, mm, fonts) => {
+  const rowY = mm(45);
 
-  // Left: date
-  const dateLabel = `তাংঃ ${fmtBanglaDateLong(notice.createdAt)}`;
-  doc.font(fonts.bold).fontSize(11).fillColor("#111111");
-  if (simulateBold) {
-    drawBold(doc, dateLabel, mm(18), rowY, { color: "#111111", strokeW: 0.3 });
-  } else {
-    doc.text(dateLabel, mm(18), rowY);
-  }
-
-  // Right: day name
-  const dayLabel = `রোজঃ ${getBanglaDay(notice.createdAt)}`;
-  doc.font(fonts.bold).fontSize(11).fillColor("#111111");
-  if (simulateBold) {
-    // measure approx width and place right-aligned manually
-    drawBold(doc, dayLabel, 0, rowY, {
-      align: "right",
-      width: W - mm(18),
+  drawMixedInline(
+    doc,
+    `তাংঃ ${fmtBanglaDateLong(notice.createdAt)}`,
+    mm(18),
+    rowY,
+    fonts,
+    11,
+    {
       color: "#111111",
-      strokeW: 0.3,
-    });
-  } else {
-    doc.text(dayLabel, 0, rowY, { align: "right", width: W - mm(18) });
-  }
-
-  // Ref slug — right side below day
-  doc
-    .font(fonts.regular)
-    .fontSize(8)
-    .fillColor("#888888")
-    .text(`Ref: ${notice.noticeSlug}`, 0, rowY + mm(6), {
+    },
+  );
+  drawMixedInline(
+    doc,
+    `রোজঃ ${getBanglaDay(notice.createdAt)}`,
+    0,
+    rowY,
+    fonts,
+    11,
+    {
+      color: "#111111",
       align: "right",
       width: W - mm(18),
-    });
+    },
+  );
 
-  // Thin divider
+  const lineY = mm(50) + 15;
   doc
-    .moveTo(mm(15), mm(62))
-    .lineTo(W - mm(15), mm(62))
-    .lineWidth(0.5)
-    .strokeColor("#aaaaaa")
+    .moveTo(mm(15), lineY)
+    .lineTo(W - mm(15), lineY)
+    .lineWidth(1.2)
+    .strokeColor("#111111")
+    .stroke();
+  doc
+    .moveTo(mm(15), lineY + 4)
+    .lineTo(W - mm(15), lineY + 4)
+    .lineWidth(0.6)
+    .strokeColor("#111111")
     .stroke();
 };
 
 // ── Body text ─────────────────────────────────────────────────────────────────
 const drawBody = (doc, notice, W, mm, fonts) => {
-  // "বিষয়ঃ" label
-  doc
-    .font(fonts.regular)
-    .fontSize(11)
-    .fillColor("#333333")
-    .text("সকলের অবগতির জন্য জানানো যাইতেছে যে,", mm(20), mm(68), {
-      width: W - mm(40),
-    });
+  const fullText =
+    "এতদ্বারা সকলের অবগতির জন্য জানানো যাইতেছে যে, " + notice.notice;
 
-  // Main notice content
-  doc
-    .font(fonts.regular)
-    .fontSize(13)
-    .fillColor("#111111")
-    .text(notice.notice, mm(20), mm(78), {
-      width: W - mm(40),
-      align: "justify",
-      lineGap: 7,
-      paragraphGap: 6,
-    });
+  drawMixedBlock(doc, fullText, mm(20), mm(80), fonts, 14, {
+    blockWidth: W - mm(40),
+    lineHeight: 28,
+    color: "#111111",
+    align: "justify",
+  });
 };
 
 // ── Signature block ───────────────────────────────────────────────────────────
-const drawSignature = (doc, notice, W, H, mm, fonts, simulateBold) => {
+const drawSignature = (doc, notice, W, H, mm, fonts) => {
   const sigW = mm(72);
   const sigX = W - mm(18) - sigW;
-  const sigLineY = H - mm(58);
+  let sigY = H - mm(58);
+  const lineGap = mm(8);
 
-  // Signature line
-  doc
-    .moveTo(sigX, sigLineY)
-    .lineTo(sigX + sigW, sigLineY)
-    .lineWidth(0.8)
-    .strokeColor("#333333")
-    .stroke();
+  drawBoldMixed(doc, notice.signatureName || "যোগাযোগঃ", sigX, sigY, fonts, {
+    width: sigW,
+    align: "right",
+    color: "#111111",
+    strokeW: 0.3,
+    fontSize: 12,
+  });
+  sigY += lineGap;
 
-  // Name
-  const sigName = notice.signatureName || "মোঃ শাহরিয়ার আহমেদ";
-  doc.font(fonts.bold).fontSize(12).fillColor("#111111");
-  if (simulateBold) {
-    drawBold(doc, sigName, sigX, sigLineY + mm(3), {
-      width: sigW,
-      align: "center",
-      color: "#111111",
-      strokeW: 0.3,
-    });
-  } else {
-    doc.text(sigName, sigX, sigLineY + mm(3), { width: sigW, align: "center" });
-  }
+  drawMixedInline(
+    doc,
+    notice.academyName || "রয়েল একাডেমি",
+    sigX,
+    sigY,
+    fonts,
+    11,
+    { color: "#333333", align: "right", width: sigW },
+  );
+  sigY += lineGap;
 
-  // Title
-  doc
-    .font(fonts.regular)
-    .fontSize(11)
-    .fillColor("#333333")
-    .text(
-      notice.signatureTitle || "ব্যবস্থাপনা পরিচালক",
-      sigX,
-      sigLineY + mm(10),
-      {
-        width: sigW,
-        align: "center",
-      },
-    );
+  drawMixedInline(
+    doc,
+    notice.subTitle || "বেলকুচি, সিরাজগঞ্জ",
+    sigX,
+    sigY,
+    fonts,
+    11,
+    { color: "#555555", align: "right", width: sigW },
+  );
+  sigY += lineGap;
 
-  // Institution lines
-  doc
-    .font(fonts.regular)
-    .fontSize(10)
-    .fillColor("#555555")
-    .text(notice.academyName || "রেয়েল একাডেমি", sigX, sigLineY + mm(17), {
-      width: sigW,
-      align: "center",
-    })
-    .text("বেলকুচি, সিরাজগঞ্জ", sigX, sigLineY + mm(24), {
-      width: sigW,
-      align: "center",
-    });
+  drawMixedInline(doc, "মোবাইলঃ", sigX, sigY, fonts, 11, {
+    color: "#333333",
+    align: "right",
+    width: sigW,
+  });
+  sigY += lineGap;
+
+  drawMixedInline(doc, notice.phone1 || "০১৬৫০-০৩৩১৮১", sigX, sigY, fonts, 11, {
+    color: "#333333",
+    align: "right",
+    width: sigW,
+  });
+  sigY += lineGap;
+
+  drawMixedInline(doc, notice.phone2 || "০১৮০৪-৫৫৮২২৬", sigX, sigY, fonts, 11, {
+    color: "#333333",
+    align: "right",
+    width: sigW,
+  });
 };
 
 // ── Footer ────────────────────────────────────────────────────────────────────
 const drawFooter = (doc, notice, W, H, mm, fonts) => {
-  // Footer divider
   doc
     .moveTo(mm(15), H - mm(14))
     .lineTo(W - mm(15), H - mm(14))
@@ -366,9 +478,8 @@ const drawFooter = (doc, notice, W, H, mm, fonts) => {
     .strokeColor("#cccccc")
     .stroke();
 
-  // Footer text
   doc
-    .font(fonts.regular)
+    .font(fonts.english)
     .fontSize(8)
     .fillColor("#aaaaaa")
     .text(
@@ -389,7 +500,8 @@ const drawFooter = (doc, notice, W, H, mm, fonts) => {
  *   createdAt: Date|string,
  *   expiresAt: Date|string,
  *   signatureName?: string,
- *   signatureTitle?: string,
+ *   phone1?: string,
+ *   phone2?: string,
  *   academyName?: string,
  *   subTitle?: string,
  *   noticeHeading?: string,
@@ -399,16 +511,14 @@ const drawFooter = (doc, notice, W, H, mm, fonts) => {
 export const generateNoticePdf = (notice) => {
   return new Promise((resolve, reject) => {
     try {
-      // Resolve fonts — throws if no font found
-      const { regular, bold, simulateBold } = resolveFonts();
-      const fonts = { regular, bold };
+      const fonts = resolveFonts();
 
       const doc = new PDFDocument({
         size: "A4",
         margins: { top: 0, bottom: 0, left: 0, right: 0 },
         info: {
           Title: notice.noticeSlug || "Notice",
-          Author: notice.academyName || "রেয়েল একাডেমি",
+          Author: notice.academyName || "রয়েল একাডেমি",
           Subject: notice.noticeHeading || "জরুরি বিজ্ঞপ্তি",
           Creator: "Royal Academy Notice System",
         },
@@ -419,33 +529,19 @@ export const generateNoticePdf = (notice) => {
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", reject);
 
-      // Register fonts
-      doc.registerFont("BanglaRegular", regular);
-      doc.registerFont("BanglaBold", bold);
+      doc.registerFont("BanglaRegular", fonts.bangla);
+      doc.registerFont("EnglishRegular", fonts.english);
 
-      const W = doc.page.width; // 595.28 pt
-      const H = doc.page.height; // 841.89 pt
+      const W = doc.page.width;
+      const H = doc.page.height;
       const mm = (n) => n * 2.8346;
 
-      // ── White background
       doc.rect(0, 0, W, H).fillColor("#FFFFFF").fill();
-
-      // ── Decorative borders + corners
       drawBorders(doc, W, H, mm);
-
-      // ── Header (logo + academy name + notice heading banner)
-      drawHeader(doc, notice, W, mm, fonts, simulateBold);
-
-      // ── Date / Day / Ref row
-      drawMetaRow(doc, notice, W, mm, fonts, simulateBold);
-
-      // ── Body notice text
+      drawHeader(doc, notice, W, mm, fonts);
+      drawMetaRow(doc, notice, W, mm, fonts);
       drawBody(doc, notice, W, mm, fonts);
-
-      // ── Signature block
-      drawSignature(doc, notice, W, H, mm, fonts, simulateBold);
-
-      // ── Footer
+      drawSignature(doc, notice, W, H, mm, fonts);
       drawFooter(doc, notice, W, H, mm, fonts);
 
       doc.end();
