@@ -99,7 +99,11 @@ export const createWeeklyExam = async (req, res) => {
         req.files,
         "weekly-exams",
       );
-      images = uploadResults.map((r) => r.secure_url);
+
+      images = uploadResults.map((r) => ({
+        imageUrl: r.secure_url,
+        publicId: r.public_id,
+      }));
     }
 
     const slug = buildSlug(ExamNumber, cls, subject, teacherSlug ?? "unknown");
@@ -154,7 +158,11 @@ export const updateWeeklyExam = async (req, res) => {
         req.files,
         "weekly-exams",
       );
-      update.images = uploadResults.map((r) => r.secure_url);
+      // updateWeeklyExam তেও একই
+      update.images = uploadResults.map((r) => ({
+        imageUrl: r.secure_url,
+        publicId: r.public_id,
+      }));
     }
 
     const exam = await WeeklyExam.findByIdAndUpdate(id, update, { new: true });

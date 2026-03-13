@@ -11,7 +11,12 @@ const weeklyExamSchema = new mongoose.Schema(
     mark: { type: Number, required: true },
     ExamNumber: { type: String, required: true },
     topics: { type: String, required: true, trim: true },
-    images: [{ type: String }],
+    images: [
+      {
+        imageUrl: { type: String, required: true },
+        publicId: { type: String, required: true },
+      },
+    ],
   },
   { timestamps: true },
 );
