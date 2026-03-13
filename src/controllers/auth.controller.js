@@ -4,19 +4,22 @@ import Teacher from "../models/teacher.model.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "changeme-secret";
 const COOKIE_NAME = "royal_token";
+
+// ✅ এখন
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production",
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  secure: true,
+  sameSite: "none",
   maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: "/",
 };
 
 const HARDCODED_ADMIN = {
   _id: "hardcoded-admin",
-  name: "Super Admin",
-  email: "hello@world.com",
+  name: "Owner",
+  email: "mib@kobita.com",
   role: "admin",
-  password: "admin",
+  password: "kobita",
   isHardcoded: true,
   slug: "X666X",
 };
@@ -121,11 +124,13 @@ export const me = async (req, res) => {
 };
 
 // ── POST /api/auth/logout ─────────────────────────────────────────────────────
+// ✅ logout এ
 export const logout = (req, res) => {
   res.clearCookie(COOKIE_NAME, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    secure: true,
+    sameSite: "none",
+    path: "/",
   });
   return res.status(200).json({ success: true, message: "Logged out" });
 };

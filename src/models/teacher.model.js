@@ -14,13 +14,13 @@ const teacherSchema = new mongoose.Schema(
       lowercase: true,
     },
     role: { type: String, enum: ROLES, default: "teacher" },
-    password: { type: String, required: true }, // plain: same as role name
+    password: { type: String, required: true },
     isHardcoded: { type: Boolean, default: false },
-    slug: { type: String, unique: true, sparse: true }, // e.g. T2601
-
-    // ── profile fields (optional) ──────────────────────────────────────────
+    slug: { type: String, unique: true, sparse: true },
+    // ── profile fields ────────────────────────────────────────────────────
     phone: { type: String, trim: true, default: null },
     address: { type: String, trim: true, default: null },
+    qualification: { type: String, trim: true, default: null }, // ← নতুন
     avatar: {
       url: { type: String, default: null },
       publicId: { type: String, default: null },

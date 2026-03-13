@@ -5,12 +5,12 @@ import path from "path";
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
-  const allowed = /jpeg|jpg|png|gif|webp/;
+  // ✅ webp input ও accept করো (যদিও সব output webp হবে)
+  const allowed = /jpeg|jpg|png|gif|webp|avif|tiff|bmp/;
   const extname = allowed.test(path.extname(file.originalname).toLowerCase());
   const mimetype = allowed.test(file.mimetype);
   if (mimetype && extname) cb(null, true);
-  else
-    cb(new Error("Only image files are allowed (jpeg, jpg, png, gif, webp)"));
+  else cb(new Error("Only image files are allowed"));
 };
 
 const upload = multer({

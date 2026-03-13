@@ -1,5 +1,6 @@
 // src/config/cloudinary.js
 import { v2 as cloudinary } from "cloudinary";
+import sharp from "sharp"; // ✅ নতুন
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -9,27 +10,26 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-if (process.env.NODE_ENV !== "production") {
-  console.log("Cloudinary config loaded:");
-  console.log("  cloud_name:", process.env.CLOUDINARY_CLOUD_NAME);
-  console.log(
-    "  api_key   :",
-    process.env.CLOUDINARY_API_KEY?.slice(0, 4) + "...",
-  );
-}
+// ─── WebP converter ───────────────────────────────────────────────────────────
+const toWebP = async (buffer) => {
+  return sharp(buffer)
+    .webp({ quality: 85 }) // quality 85 — ভালো balance
+    .toBuffer();
+};
 
 // ─── single upload (buffer) ───────────────────────────────────────────────────
-export const uploadToCloudinary = (fileBuffer, folder = "uploads") => {
-  return new Promise((resolve, reject) => {
-    if (!fileBuffer || fileBuffer.length === 0)
-      return reject(new Error("Empty buffer"));
+export const uploadToCloudinary = async (fileBuffer, folder = "uploads") => {
+  if (!fileBuffer || fileBuffer.length === 0) throw new Error("Empty buffer");
 
+  const webpBuffer = await toWebP(fileBuffer); // ✅ convert to webp
+
+  return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(new Error("Cloudinary upload timed out after 60s"));
     }, 60000);
 
     const stream = cloudinary.uploader.upload_stream(
-      { folder, resource_type: "auto" },
+      { folder, resource_type: "image", format: "webp" }, // ✅ format: webp
       (error, result) => {
         clearTimeout(timeout);
         if (error) reject(error);
@@ -41,12 +41,11 @@ export const uploadToCloudinary = (fileBuffer, folder = "uploads") => {
       clearTimeout(timeout);
       reject(err);
     });
-    stream.end(fileBuffer);
+    stream.end(webpBuffer); // ✅ webp buffer পাঠাও
   });
 };
 
 // ─── alias used by avatar upload ─────────────────────────────────────────────
-// accepts a multer file object { buffer, ... }
 export const uploadSingleToCloudinary = (file, folder = "uploads") =>
   uploadToCloudinary(file.buffer, folder);
 

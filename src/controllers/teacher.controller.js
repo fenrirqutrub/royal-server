@@ -6,13 +6,12 @@ import {
 } from "../config/cloudinary.js";
 
 // ─── Hardcoded super-admin ────────────────────────────────────────────────────
-// ⚠️  Keep slug in sync with auth.controller.js
 const HARDCODED_ADMIN = {
   _id: "hardcoded-admin",
   name: "Owner",
   email: "mib@kobita.com",
-  role: "owner",
-  password: "owner",
+  role: "admin",
+  password: "kobita",
   isHardcoded: true,
   slug: "69X69",
 };
@@ -20,13 +19,6 @@ const HARDCODED_ADMIN = {
 // ─── Role config ──────────────────────────────────────────────────────────────
 const ROLE_PREFIX = { teacher: "T", principal: "P", admin: "A" };
 
-/**
- * Which roles each caller is allowed to create / assign.
- *   super-admin  →  admin, principal, teacher
- *   admin        →  admin, principal, teacher
- *   principal    →  principal, teacher
- *   teacher      →  (none)
- */
 const ROLE_PERMISSIONS = {
   "super-admin": ["admin", "principal", "teacher"],
   admin: ["admin", "principal", "teacher"],
@@ -35,15 +27,10 @@ const ROLE_PERMISSIONS = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Detect super-admin by id OR isHardcoded flag.
- * This is the single detection point — no slug comparison needed.
- */
 const resolveCallerRole = (callerId, isHardcoded) => {
   if (callerId === HARDCODED_ADMIN._id || isHardcoded === true)
     return "super-admin";
-  return null; // will fall back to callerRole from body
+  return null;
 };
 
 const canAssign = (effectiveCallerRole, targetRole) =>
@@ -53,8 +40,6 @@ const buildSlug = async (role, excludeId = null) => {
   const prefix = ROLE_PREFIX[role] ?? role[0].toUpperCase();
   const year = String(new Date().getFullYear()).slice(-2);
 
-  // Find the highest existing sequence number for this role and keep incrementing
-  // until we find a slug that doesn't exist — handles gaps from deleted docs
   const existing = await Teacher.find(
     { slug: { $regex: `^${prefix}${year}` } },
     { slug: 1 },
@@ -79,7 +64,7 @@ const migrateMissingSlugs = async () => {
       const slug = await buildSlug(doc.role);
       await Teacher.findByIdAndUpdate(doc._id, { slug });
     } catch (_) {
-      /* skip collision */
+      /* skip */
     }
   }
 };
@@ -110,9 +95,9 @@ export const createTeacher = async (req, res) => {
       name,
       email,
       role = "teacher",
-      callerId, // id of the logged-in user
-      callerRole, // role string from frontend
-      isHardcoded, // boolean flag from frontend
+      callerId,
+      callerRole,
+      isHardcoded,
     } = req.body;
 
     if (!name?.trim() || !email?.trim())
@@ -124,14 +109,12 @@ export const createTeacher = async (req, res) => {
         .status(400)
         .json({ message: `Role must be one of: ${validRoles.join(", ")}` });
 
-    // Resolve effective caller role
     const effectiveCaller =
       resolveCallerRole(callerId, isHardcoded) ?? callerRole ?? "teacher";
-
     if (!canAssign(effectiveCaller, role))
-      return res.status(403).json({
-        message: `A ${effectiveCaller} cannot create a ${role}`,
-      });
+      return res
+        .status(403)
+        .json({ message: `A ${effectiveCaller} cannot create a ${role}` });
 
     const slug = await buildSlug(role);
     const teacher = await Teacher.create({
@@ -155,7 +138,6 @@ export const createTeacher = async (req, res) => {
 export const updateTeacher = async (req, res) => {
   try {
     const { id } = req.params;
-
     if (id === HARDCODED_ADMIN._id)
       return res.status(403).json({ message: "Cannot modify hardcoded admin" });
 
@@ -196,7 +178,6 @@ export const updateTeacher = async (req, res) => {
 export const deleteTeacher = async (req, res) => {
   try {
     const { id } = req.params;
-
     if (id === HARDCODED_ADMIN._id)
       return res.status(403).json({ message: "Cannot delete hardcoded admin" });
 
@@ -232,15 +213,17 @@ export const getProfile = async (req, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const { slug } = req.params;
-
     if (slug === HARDCODED_ADMIN.slug)
       return res.status(403).json({ message: "Cannot modify hardcoded admin" });
 
-    const { name, phone, address } = req.body;
+    const { name, phone, address, qualification } = req.body; // ← qualification যোগ হয়েছে
+
     const update = {};
-    if (name) update.name = name.trim();
+    if (name !== undefined) update.name = name.trim();
     if (phone !== undefined) update.phone = phone?.trim() || null;
     if (address !== undefined) update.address = address?.trim() || null;
+    if (qualification !== undefined)
+      update.qualification = qualification?.trim() || null;
 
     const teacher = await Teacher.findOneAndUpdate({ slug }, update, {
       new: true,
@@ -257,7 +240,6 @@ export const updateProfile = async (req, res) => {
 export const updateAvatar = async (req, res) => {
   try {
     const { slug } = req.params;
-
     if (slug === HARDCODED_ADMIN.slug)
       return res.status(403).json({ message: "Cannot modify hardcoded admin" });
 
@@ -285,7 +267,6 @@ export const updateAvatar = async (req, res) => {
 export const loginTeacher = async (req, res) => {
   try {
     const { email, password } = req.body;
-
     if (!email || !password)
       return res
         .status(400)
