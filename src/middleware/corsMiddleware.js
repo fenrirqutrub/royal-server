@@ -2,7 +2,7 @@
 import cors from "cors";
 
 const corsMiddleware = cors({
-  origin: true, // Development-এ সব origin allow করুন
+  origin: true,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"],
   allowedHeaders: [

@@ -8,11 +8,9 @@ const COOKIE_OPTS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+  maxAge: 7 * 24 * 60 * 60 * 1000,
 };
 
-// ─── Single source of truth for hardcoded admin ───────────────────────────────
-// ⚠️  Keep this in sync with teacher.controller.js
 const HARDCODED_ADMIN = {
   _id: "hardcoded-admin",
   name: "Super Admin",
@@ -20,7 +18,7 @@ const HARDCODED_ADMIN = {
   role: "admin",
   password: "admin",
   isHardcoded: true,
-  slug: "X666X", // must match teacher.controller.js
+  slug: "X666X",
 };
 
 // ── POST /api/auth/login ──────────────────────────────────────────────────────
@@ -33,13 +31,13 @@ export const login = async (req, res) => {
         .json({ message: "Email and password are required" });
 
     let userPayload;
+    let jwtPayload; // JWT এ avatar রাখব না (অপ্রয়োজনীয় বড় হয়)
 
     if (
       email.toLowerCase() === HARDCODED_ADMIN.email &&
       password === HARDCODED_ADMIN.password
     ) {
-      // ✅ isHardcoded goes into the JWT so /me can return it
-      userPayload = {
+      jwtPayload = {
         id: HARDCODED_ADMIN._id,
         email: HARDCODED_ADMIN.email,
         name: HARDCODED_ADMIN.name,
@@ -47,12 +45,16 @@ export const login = async (req, res) => {
         slug: HARDCODED_ADMIN.slug,
         isHardcoded: true,
       };
+      userPayload = {
+        ...jwtPayload,
+        avatar: { url: null, publicId: null }, // ✅ hardcoded admin has no avatar
+      };
     } else {
       const teacher = await Teacher.findOne({ email: email.toLowerCase() });
       if (!teacher || teacher.password !== password)
         return res.status(401).json({ message: "Invalid credentials" });
 
-      userPayload = {
+      jwtPayload = {
         id: teacher._id.toString(),
         email: teacher.email,
         name: teacher.name,
@@ -60,9 +62,13 @@ export const login = async (req, res) => {
         slug: teacher.slug ?? "",
         isHardcoded: false,
       };
+      userPayload = {
+        ...jwtPayload,
+        avatar: teacher.avatar ?? { url: null, publicId: null }, // ✅ avatar include
+      };
     }
 
-    const token = jwt.sign(userPayload, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign(jwtPayload, JWT_SECRET, { expiresIn: "7d" });
     res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
 
     return res.status(200).json({ success: true, user: userPayload });
@@ -79,7 +85,6 @@ export const me = async (req, res) => {
 
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // Hardcoded admin — return directly, no DB call needed
     if (decoded.id === HARDCODED_ADMIN._id) {
       return res.status(200).json({
         user: {
@@ -88,12 +93,13 @@ export const me = async (req, res) => {
           name: HARDCODED_ADMIN.name,
           role: HARDCODED_ADMIN.role,
           slug: HARDCODED_ADMIN.slug,
-          isHardcoded: true, // ✅ always present
+          isHardcoded: true,
+          avatar: { url: null, publicId: null }, // ✅ always send avatar field
         },
       });
     }
 
-    // DB user — fetch fresh data
+    // DB থেকে fresh data নাও — এখানেই avatar আসবে
     const teacher = await Teacher.findById(decoded.id).select("-password");
     if (!teacher) return res.status(401).json({ message: "User not found" });
 
@@ -105,6 +111,7 @@ export const me = async (req, res) => {
         role: teacher.role,
         slug: teacher.slug ?? "",
         isHardcoded: false,
+        avatar: teacher.avatar ?? { url: null, publicId: null }, // ✅ এটাই আগে missing ছিল
       },
     });
   } catch (err) {

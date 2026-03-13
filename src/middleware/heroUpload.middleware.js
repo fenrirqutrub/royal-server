@@ -1,20 +1,16 @@
 // src/middleware/heroUpload.middleware.js
 import multer from "multer";
-import path from "path";
 import sharp from "sharp";
 
-// Memory storage ব্যবহার করুন - Vercel-এ disk storage কাজ করবে না
+// Memory storage - Vercel-এ disk storage কাজ করবে না
 const storage = multer.memoryStorage();
 
-// File filter - শুধু PNG, JPG, JPEG
+// File filter - সব ধরনের image accept করো
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = ["image/jpeg", "image/jpg", "image/png"];
-
-  if (allowedTypes.includes(file.mimetype)) {
+  if (file.mimetype.startsWith("image/")) {
     return cb(null, true);
-  } else {
-    cb(new Error("Only PNG, JPG, and JPEG files are allowed"));
   }
+  cb(new Error("Only image files are allowed"));
 };
 
 // Multer configuration
@@ -29,61 +25,47 @@ const upload = multer({
 // Single file upload for hero
 export const uploadHeroImage = upload.single("img");
 
-// Landscape validation - buffer থেকে directly check
+// Landscape validation + WebP conversion
 export const validateLandscapeImage = async (req, res, next) => {
-  console.log("🔍 Validation middleware called!");
-  console.log("📁 File:", req.file);
-
   try {
     if (!req.file) {
-      console.log("❌ No file found");
       return res.status(400).json({
         success: false,
         message: "Image file is required",
       });
     }
 
-    // Buffer থেকে metadata read করুন
+    // Buffer থেকে metadata read করো
     const metadata = await sharp(req.file.buffer).metadata();
-    const width = metadata.width;
-    const height = metadata.height;
-
-    console.log("📏 Image dimensions:", width, "x", height);
-
-    // Calculate aspect ratio (width/height)
+    const { width, height } = metadata;
     const aspectRatio = width / height;
+    const minAspectRatio = 1.3;
 
-    console.log("📐 Aspect ratio:", aspectRatio.toFixed(2));
-
-    // Minimum aspect ratio for proper landscape
-    const minAspectRatio = 1.3; // Mane width at least 30% boro hote hobe height theke
-
-    // Check if truly landscape
     if (aspectRatio < minAspectRatio) {
-      console.log("❌ Not proper landscape - ratio too low");
-
       return res.status(400).json({
         success: false,
         message: "Only proper landscape/horizontal images are allowed",
         uploaded: {
-          width: width,
-          height: height,
+          width,
+          height,
           aspectRatio: aspectRatio.toFixed(2),
-          orientation:
-            aspectRatio >= minAspectRatio ? "landscape ✓" : "not landscape ✗",
         },
-        requirement: `Image must be horizontal with aspect ratio at least ${minAspectRatio} (e.g., 16:9 = 1.78, 4:3 = 1.33, etc.)`,
+        requirement: `Image must be horizontal with aspect ratio at least ${minAspectRatio} (e.g., 16:9 = 1.78, 4:3 = 1.33)`,
       });
     }
 
-    console.log("✅ Validation passed!");
+    // ✅ WebP-তে convert করো
+    req.file.buffer = await sharp(req.file.buffer)
+      .webp({ quality: 85 })
+      .toBuffer();
+    req.file.mimetype = "image/webp";
+    req.file.originalname = req.file.originalname.replace(/\.[^.]+$/, ".webp");
+
     next();
   } catch (error) {
-    console.log("💥 Validation error:", error.message);
-
     return res.status(500).json({
       success: false,
-      message: "Error validating image orientation",
+      message: "Error processing image",
       error: error.message,
     });
   }
