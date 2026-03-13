@@ -9,12 +9,12 @@ import {
 // ⚠️  Keep slug in sync with auth.controller.js
 const HARDCODED_ADMIN = {
   _id: "hardcoded-admin",
-  name: "Super Admin",
-  email: "hello@world.com",
-  role: "admin",
-  password: "admin",
+  name: "Owner",
+  email: "mib@kobita.com",
+  role: "owner",
+  password: "owner",
   isHardcoded: true,
-  slug: "X666X",
+  slug: "69X69",
 };
 
 // ─── Role config ──────────────────────────────────────────────────────────────
