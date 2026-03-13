@@ -18,7 +18,7 @@ const HARDCODED_ADMIN = {
   _id: "hardcoded-admin",
   name: "Owner",
   email: "mib@kobita.com",
-  role: "admin",
+  role: "owner",
   password: "kobita",
   isHardcoded: true,
   slug: "X666X",

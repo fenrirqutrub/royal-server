@@ -10,7 +10,7 @@ const HARDCODED_ADMIN = {
   _id: "hardcoded-admin",
   name: "Owner",
   email: "mib@kobita.com",
-  role: "admin",
+  role: "owner",
   password: "kobita",
   isHardcoded: true,
   slug: "69X69",
@@ -20,7 +20,7 @@ const HARDCODED_ADMIN = {
 const ROLE_PREFIX = { teacher: "T", principal: "P", admin: "A" };
 
 const ROLE_PERMISSIONS = {
-  "super-admin": ["admin", "principal", "teacher"],
+  owner: ["admin", "principal", "teacher"], // ← নতুন
   admin: ["admin", "principal", "teacher"],
   principal: ["principal", "teacher"],
   teacher: [],
@@ -28,8 +28,7 @@ const ROLE_PERMISSIONS = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const resolveCallerRole = (callerId, isHardcoded) => {
-  if (callerId === HARDCODED_ADMIN._id || isHardcoded === true)
-    return "super-admin";
+  if (callerId === HARDCODED_ADMIN._id || isHardcoded === true) return "owner";
   return null;
 };
 
