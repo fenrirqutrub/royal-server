@@ -7,15 +7,16 @@ const generateSlug = async (date = new Date()) => {
   const yy = String(date.getFullYear()).slice(-2);
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const dd = String(date.getDate()).padStart(2, "0");
-  const prefix = `RABN-${yy}${mm}${dd}`;
+  const prefix = `Royal-Notice-${yy}${mm}${dd}`;
 
-  const regex = new RegExp(`^${prefix}-N\\d+$`);
+  // Matches: Royal-Notice-260317-01, Royal-Notice-260317-02, etc.
+  const regex = new RegExp(`^${prefix}-\\d+$`);
   const existing = await Notice.find({ noticeSlug: regex }).select(
     "noticeSlug",
   );
   const seq = existing.length + 1;
 
-  return `${prefix}-N${seq}`;
+  return `${prefix}-${String(seq).padStart(2, "0")}`;
 };
 
 // ── POST /api/notices ─────────────────────────────────────────────────────────
@@ -41,6 +42,7 @@ export const createNotice = async (req, res) => {
     const newNotice = await Notice.create({
       noticeSlug,
       notice: notice.trim(),
+      durationDays: days, // ← store duration so it's readable later
       expiresAt,
     });
 
@@ -63,7 +65,6 @@ export const getActiveNotice = async (req, res) => {
       expiresAt: { $gt: new Date() },
     }).sort({ createdAt: -1 });
 
-    // BUG FIX: was calling res.status(500) twice — second send crashed the server
     res.status(200).json({ data: notice || null });
   } catch (err) {
     console.error("getActiveNotice error:", err);

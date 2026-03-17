@@ -14,6 +14,12 @@ const noticeSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    durationDays: {
+      type: Number,
+      required: true,
+      min: 1,
+      max: 365,
+    },
     expiresAt: {
       type: Date,
       required: true,
