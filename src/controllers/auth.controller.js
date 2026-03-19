@@ -18,7 +18,6 @@ const COOKIE_OPTS = {
   path: "/",
 };
 
-// Exported so user.controller can reuse it
 export const makePayload = (u) => ({
   id: u._id?.toString() ?? u._id,
   name: u.name,
@@ -43,6 +42,68 @@ const issueToken = (res, user) => {
     { expiresIn: "7d" },
   );
   res.cookie(COOKIE_NAME, token, COOKIE_OPTS);
+};
+
+// ─── Slug builder ─────────────────────────────────────────────────────────────
+export const buildSlug = async (role, excludeId = null) => {
+  const prefix = ROLE_PREFIX[role] ?? role[0].toUpperCase();
+  const year = String(new Date().getFullYear()).slice(-2);
+  const query = { slug: { $regex: `^${prefix}${year}` } };
+  if (excludeId) query._id = { $ne: excludeId };
+
+  const existing = await User.find(query, { slug: 1 }).lean();
+  const used = new Set(
+    existing
+      .map((u) => parseInt(u.slug?.slice(-2) ?? "0", 10))
+      .filter((n) => !isNaN(n)),
+  );
+  let seq = 1;
+  while (used.has(seq)) seq++;
+  return `${prefix}${year}${String(seq).padStart(2, "0")}`;
+};
+
+// ─── Shared address fields builder ────────────────────────────────────────────
+const buildAddressFields = (body) => {
+  const {
+    gramNam,
+    para,
+    thana,
+    district,
+    division,
+    landmark,
+    permanentSameAsPresent,
+    permanentGramNam,
+    permanentPara,
+    permanentThana,
+    permanentDistrict,
+    permanentDivision,
+  } = body;
+
+  const isSame =
+    permanentSameAsPresent === "true" || permanentSameAsPresent === true;
+
+  return {
+    gramNam: gramNam?.trim() ?? null,
+    para: para?.trim() ?? null,
+    thana: thana?.trim() ?? null,
+    district: district?.trim() ?? null,
+    division: division?.trim() ?? null,
+    landmark: landmark?.trim() ?? null,
+    permanentSameAsPresent: isSame,
+    permanentGramNam: isSame
+      ? gramNam?.trim()
+      : (permanentGramNam?.trim() ?? null),
+    permanentPara: isSame
+      ? (para?.trim() ?? null)
+      : (permanentPara?.trim() ?? null),
+    permanentThana: isSame ? thana?.trim() : (permanentThana?.trim() ?? null),
+    permanentDistrict: isSame
+      ? district?.trim()
+      : (permanentDistrict?.trim() ?? null),
+    permanentDivision: isSame
+      ? (division?.trim() ?? null)
+      : (permanentDivision?.trim() ?? null),
+  };
 };
 
 // ─── POST /api/auth/login ─────────────────────────────────────────────────────
@@ -93,10 +154,8 @@ export const checkStaffPhone = async (req, res) => {
     if (!phone?.trim())
       return res.status(400).json({ message: "ফোন নম্বর দিন" });
 
-    const trimmed = phone.trim();
-
     const record = await User.findOne({
-      phone: trimmed,
+      phone: phone.trim(),
       role: { $in: STAFF_ROLES },
       onboardingComplete: false,
     });
@@ -126,21 +185,6 @@ export const signup = async (req, res) => {
       dateOfBirth,
       religion,
       emergencyContact,
-      // Present address
-      gramNam,
-      para,
-      thana,
-      district,
-      division,
-      landmark,
-      // Permanent address
-      permanentSameAsPresent,
-      permanentGramNam,
-      permanentPara,
-      permanentThana,
-      permanentDistrict,
-      permanentDivision,
-      // Role
       role,
       // Student fields
       studentClass,
@@ -152,68 +196,62 @@ export const signup = async (req, res) => {
       degree,
       currentYear,
       qualification,
+      email,
     } = req.body;
 
     const isStudent = !role || role === "student";
 
-    if (!phone?.trim())
-      return res.status(400).json({ message: "ফোন নম্বর দিন" });
+    // ── Shared validations ────────────────────────────────────────────────────
     if (!password) return res.status(400).json({ message: "পাসওয়ার্ড দিন" });
-    if (!gramNam?.trim())
+    if (!req.body.gramNam?.trim())
       return res.status(400).json({ message: "গ্রামের নাম দিন" });
-    if (!thana?.trim()) return res.status(400).json({ message: "থানা দিন" });
-    if (!district?.trim()) return res.status(400).json({ message: "জেলা দিন" });
+    if (!req.body.thana?.trim())
+      return res.status(400).json({ message: "থানা দিন" });
+    if (!req.body.district?.trim())
+      return res.status(400).json({ message: "জেলা দিন" });
 
-    const trimmedPhone = phone.trim();
+    // ── Parse date safely ─────────────────────────────────────────────────────
+    let parsedDob = null;
+    if (dateOfBirth) {
+      const d = new Date(dateOfBirth);
+      if (isNaN(d.getTime()))
+        return res.status(400).json({ message: "জন্ম তারিখ সঠিক নয়" });
+      parsedDob = d;
+    }
 
+    // ── Avatar upload ─────────────────────────────────────────────────────────
     let avatar = { url: null, publicId: null };
     if (req.file) {
       const result = await uploadSingleToCloudinary(req.file, "avatars");
       avatar = { url: result.secure_url, publicId: result.public_id };
     }
 
-    const isSame =
-      permanentSameAsPresent === "true" || permanentSameAsPresent === true;
-
-    const addressFields = {
-      gramNam: gramNam.trim(),
-      para: para?.trim() ?? null,
-      thana: thana.trim(),
-      district: district.trim(),
-      division: division?.trim() ?? null,
-      landmark: landmark?.trim() ?? null,
-      permanentSameAsPresent: isSame,
-      permanentGramNam: isSame
-        ? gramNam.trim()
-        : (permanentGramNam?.trim() ?? null),
-      permanentPara: isSame
-        ? (para?.trim() ?? null)
-        : (permanentPara?.trim() ?? null),
-      permanentThana: isSame ? thana.trim() : (permanentThana?.trim() ?? null),
-      permanentDistrict: isSame
-        ? district.trim()
-        : (permanentDistrict?.trim() ?? null),
-      permanentDivision: isSame
-        ? (division?.trim() ?? null)
-        : (permanentDivision?.trim() ?? null),
-    };
-
-    const activationFields = {
+    const sharedFields = {
       fatherName: fatherName?.trim() ?? null,
       motherName: motherName?.trim() ?? null,
-      password, // hashed by pre-save hook in model
-      gender: gender ?? null,
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-      religion: religion ?? null,
+      password,
+      gender: gender || null,
+      dateOfBirth: parsedDob,
+      religion: religion || null,
       emergencyContact: emergencyContact?.trim() ?? null,
       avatar,
       onboardingComplete: true,
-      ...addressFields,
+      ...buildAddressFields(req.body),
     };
 
-    // ── STUDENT ──────────────────────────────────────────────────────────────
+    const CLASSES_WITH_SUBJECT = [
+      "নবম শ্রেণি",
+      "দশম শ্রেণি",
+      "একাদশ শ্রেণি",
+      "দ্বাদশ শ্রেণি",
+    ];
+
+    // ── STUDENT ───────────────────────────────────────────────────────────────
     if (isStudent) {
       if (!name?.trim()) return res.status(400).json({ message: "নাম লিখুন" });
+      const trimmedPhone = phone?.trim();
+      if (!trimmedPhone)
+        return res.status(400).json({ message: "ফোন নম্বর দিন" });
 
       if (await User.findOne({ phone: trimmedPhone }))
         return res
@@ -226,18 +264,13 @@ export const signup = async (req, res) => {
         role: "student",
         phone: trimmedPhone,
         studentClass: studentClass ?? null,
-        studentSubject: [
-          "নবম শ্রেণি",
-          "দশম শ্রেণি",
-          "একাদশ শ্রেণি",
-          "দ্বাদশ শ্রেণি",
-        ].includes(studentClass)
+        studentSubject: CLASSES_WITH_SUBJECT.includes(studentClass)
           ? (studentSubject ?? null)
           : null,
         roll: roll?.trim() ?? null,
         schoolName: schoolName?.trim() ?? null,
         slug,
-        ...activationFields,
+        ...sharedFields,
       });
 
       issueToken(res, user);
@@ -247,6 +280,10 @@ export const signup = async (req, res) => {
     // ── STAFF ─────────────────────────────────────────────────────────────────
     if (!STAFF_ROLES.includes(role))
       return res.status(400).json({ message: "অবৈধ ভূমিকা" });
+
+    const trimmedPhone = phone?.trim();
+    if (!trimmedPhone)
+      return res.status(400).json({ message: "ফোন নম্বর দিন" });
 
     const staffRecord = await User.findOne({
       phone: trimmedPhone,
@@ -263,7 +300,8 @@ export const signup = async (req, res) => {
     const eduComplete =
       educationComplete === "true" || educationComplete === true;
 
-    Object.assign(staffRecord, activationFields, {
+    Object.assign(staffRecord, sharedFields, {
+      email: email?.toLowerCase().trim() || null,
       qualification: qualification?.trim() ?? null,
       educationComplete: eduComplete,
       degree: eduComplete ? (degree ?? null) : null,
@@ -277,6 +315,11 @@ export const signup = async (req, res) => {
       .status(200)
       .json({ success: true, user: makePayload(staffRecord) });
   } catch (err) {
+    console.error(
+      "[signup] error:",
+      err.message,
+      JSON.stringify(err.errors ?? {}),
+    );
     return res
       .status(500)
       .json({ message: "নিবন্ধন ব্যর্থ", error: err.message });
@@ -300,18 +343,6 @@ export const completeOnboarding = async (req, res) => {
       dateOfBirth,
       religion,
       emergencyContact,
-      gramNam,
-      para,
-      thana,
-      district,
-      division,
-      landmark,
-      permanentSameAsPresent,
-      permanentGramNam,
-      permanentPara,
-      permanentThana,
-      permanentDistrict,
-      permanentDivision,
       qualification,
       educationComplete,
       degree,
@@ -321,11 +352,20 @@ export const completeOnboarding = async (req, res) => {
     if (
       !phone?.trim() ||
       !password ||
-      !gramNam?.trim() ||
-      !thana?.trim() ||
-      !district?.trim()
+      !req.body.gramNam?.trim() ||
+      !req.body.thana?.trim() ||
+      !req.body.district?.trim()
     )
       return res.status(400).json({ message: "প্রয়োজনীয় তথ্য পূরণ করুন" });
+
+    // ── Parse date safely ─────────────────────────────────────────────────────
+    let parsedDob = null;
+    if (dateOfBirth) {
+      const d = new Date(dateOfBirth);
+      if (isNaN(d.getTime()))
+        return res.status(400).json({ message: "জন্ম তারিখ সঠিক নয়" });
+      parsedDob = d;
+    }
 
     const conflict = await User.findOne({
       phone: phone.trim(),
@@ -333,9 +373,6 @@ export const completeOnboarding = async (req, res) => {
     });
     if (conflict)
       return res.status(409).json({ message: "এই ফোন নম্বর ইতিমধ্যে ব্যবহৃত" });
-
-    const isSame =
-      permanentSameAsPresent === "true" || permanentSameAsPresent === true;
 
     let avatarUpdate = {};
     if (req.file) {
@@ -351,38 +388,22 @@ export const completeOnboarding = async (req, res) => {
       };
     }
 
+    const eduComplete =
+      educationComplete === true || educationComplete === "true";
+
     const update = {
       phone: phone.trim(),
-      password, // hashed by pre-findOneAndUpdate hook in model
-      gender: gender ?? null,
-      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-      religion: religion ?? null,
+      password,
+      gender: gender || null,
+      dateOfBirth: parsedDob,
+      religion: religion || null,
       emergencyContact: emergencyContact?.trim() ?? null,
-      gramNam: gramNam.trim(),
-      para: para?.trim() ?? null,
-      thana: thana.trim(),
-      district: district.trim(),
-      division: division?.trim() ?? null,
-      landmark: landmark?.trim() ?? null,
-      permanentSameAsPresent: isSame,
-      permanentGramNam: isSame
-        ? gramNam.trim()
-        : (permanentGramNam?.trim() ?? null),
-      permanentPara: isSame
-        ? (para?.trim() ?? null)
-        : (permanentPara?.trim() ?? null),
-      permanentThana: isSame ? thana.trim() : (permanentThana?.trim() ?? null),
-      permanentDistrict: isSame
-        ? district.trim()
-        : (permanentDistrict?.trim() ?? null),
-      permanentDivision: isSame
-        ? (division?.trim() ?? null)
-        : (permanentDivision?.trim() ?? null),
       qualification: qualification?.trim() ?? null,
-      educationComplete: educationComplete ?? null,
-      degree: educationComplete ? (degree ?? null) : null,
-      currentYear: educationComplete === false ? (currentYear ?? null) : null,
+      educationComplete: eduComplete ?? null,
+      degree: eduComplete ? (degree ?? null) : null,
+      currentYear: eduComplete === false ? (currentYear ?? null) : null,
       onboardingComplete: true,
+      ...buildAddressFields(req.body),
       ...avatarUpdate,
     };
 
@@ -430,20 +451,83 @@ export const logout = (req, res) => {
   return res.status(200).json({ success: true });
 };
 
-// ─── Slug builder ─────────────────────────────────────────────────────────────
-export const buildSlug = async (role, excludeId = null) => {
-  const prefix = ROLE_PREFIX[role] ?? role[0].toUpperCase();
-  const year = String(new Date().getFullYear()).slice(-2);
-  const query = { slug: { $regex: `^${prefix}${year}` } };
-  if (excludeId) query._id = { $ne: excludeId };
+// ─── POST /api/auth/forgot-password ──────────────────────────────────────────
+export const forgotPassword = async (req, res) => {
+  try {
+    const { phone, dateOfBirth } = req.body;
+    if (!phone?.trim())
+      return res.status(400).json({ message: "ফোন নম্বর দিন" });
+    if (!dateOfBirth)
+      return res.status(400).json({ message: "জন্ম তারিখ দিন" });
 
-  const existing = await User.find(query, { slug: 1 }).lean();
-  const used = new Set(
-    existing
-      .map((u) => parseInt(u.slug?.slice(-2) ?? "0", 10))
-      .filter((n) => !isNaN(n)),
-  );
-  let seq = 1;
-  while (used.has(seq)) seq++;
-  return `${prefix}${year}${String(seq).padStart(2, "0")}`;
+    const user = await User.findOne({ phone: phone.trim() });
+    if (!user || !user.dateOfBirth)
+      return res.status(404).json({ message: "তথ্য মিলছে না" });
+
+    // Dates stored via new Date('YYYY-MM-DD') are UTC midnight → toISOString() is safe
+    const storedDate = user.dateOfBirth.toISOString().split("T")[0];
+    const givenDate = String(dateOfBirth).trim().split("T")[0];
+
+    // ±1 day tolerance: older clients had a timezone bug that stored dateOfBirth
+    // one day earlier than the user's actual birthday. Accept the adjacent days
+    // so affected users can still recover their account.
+    const givenMs = new Date(givenDate).getTime();
+    const candidates = [
+      givenDate,
+      new Date(givenMs - 86_400_000).toISOString().split("T")[0],
+      new Date(givenMs + 86_400_000).toISOString().split("T")[0],
+    ];
+
+    if (!candidates.includes(storedDate))
+      return res
+        .status(401)
+        .json({ message: "ফোন নম্বর বা জন্ম তারিখ সঠিক নয়" });
+
+    const resetToken = jwt.sign(
+      { id: user._id.toString(), purpose: "password-reset" },
+      JWT_SECRET,
+      { expiresIn: "15m" },
+    );
+
+    return res.status(200).json({ success: true, resetToken });
+  } catch (err) {
+    return res.status(500).json({ message: "ব্যর্থ", error: err.message });
+  }
+};
+
+// ─── POST /api/auth/reset-password ────────────────────────────────────────────
+export const resetPassword = async (req, res) => {
+  try {
+    const { resetToken, newPassword } = req.body;
+    if (!resetToken) return res.status(400).json({ message: "টোকেন প্রয়োজন" });
+    if (!newPassword || newPassword.length < 6)
+      return res
+        .status(400)
+        .json({ message: "কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড দিন" });
+
+    let decoded;
+    try {
+      decoded = jwt.verify(resetToken, JWT_SECRET);
+    } catch {
+      return res
+        .status(401)
+        .json({ message: "টোকেনের মেয়াদ শেষ, আবার চেষ্টা করুন" });
+    }
+
+    if (decoded.purpose !== "password-reset")
+      return res.status(401).json({ message: "অবৈধ টোকেন" });
+
+    const user = await User.findById(decoded.id);
+    if (!user)
+      return res.status(404).json({ message: "ব্যবহারকারী পাওয়া যায়নি" });
+
+    user.password = newPassword;
+    await user.save();
+
+    return res
+      .status(200)
+      .json({ success: true, message: "পাসওয়ার্ড পরিবর্তন হয়েছে" });
+  } catch (err) {
+    return res.status(500).json({ message: "ব্যর্থ", error: err.message });
+  }
 };

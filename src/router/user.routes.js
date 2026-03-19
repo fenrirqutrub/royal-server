@@ -7,6 +7,8 @@ import {
   signup,
   completeOnboarding,
   checkStaffPhone,
+  forgotPassword,
+  resetPassword,
 } from "../controllers/auth.controller.js";
 import {
   getUsers,
@@ -29,7 +31,7 @@ const router = express.Router();
 router.post("/auth/login", login);
 router.post("/auth/logout", logout);
 router.get("/auth/me", me);
-router.post("/auth/check-staff-phone", checkStaffPhone); // ← NEW
+router.post("/auth/check-staff-phone", checkStaffPhone);
 router.post("/auth/signup", uploadAvatar, handleUploadError, signup);
 router.post(
   "/auth/onboarding",
@@ -37,6 +39,8 @@ router.post(
   handleUploadError,
   completeOnboarding,
 );
+router.post("/auth/forgot-password", forgotPassword);
+router.post("/auth/reset-password", resetPassword);
 
 // ── User CRUD (admin panel) ───────────────────────────────────────────────────
 router.get("/users", getUsers);
