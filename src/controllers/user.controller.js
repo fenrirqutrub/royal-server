@@ -17,7 +17,6 @@ export const getUsers = async (req, res) => {
     const users = await User.find(filter)
       .select("-password")
       .sort({ createdAt: -1 });
-    // prepend hardcoded owner only if not already in DB
     const alreadyInDB = users.some((u) => u.email === HARDCODED_ADMIN.email);
     return res
       .status(200)
@@ -28,7 +27,6 @@ export const getUsers = async (req, res) => {
 };
 
 // ─── POST /api/users ──────────────────────────────────────────────────────────
-// Admin creates staff with name + phone + role (no password needed — temp = phone)
 export const createUser = async (req, res) => {
   try {
     const { name, phone, role = "teacher", callerRole } = req.body;
@@ -55,7 +53,7 @@ export const createUser = async (req, res) => {
       name: name.trim(),
       phone: phone.trim(),
       role,
-      password: phone.trim(), // temp — staff replaces on signup
+      password: phone.trim(),
       slug,
       onboardingComplete: false,
     });
@@ -86,7 +84,7 @@ export const updateUser = async (req, res) => {
     if (phone) update.phone = phone.trim();
     if (role) {
       update.role = role;
-      update.password = phone?.trim() ?? role; // reset temp password
+      update.password = phone?.trim() ?? role;
       update.slug = await buildSlug(role, id);
     }
 
@@ -148,28 +146,41 @@ export const updateProfile = async (req, res) => {
     const {
       name,
       fatherName,
+      motherName,
       phone,
       email,
       gender,
+      dateOfBirth,
+      religion,
+      emergencyContact,
+      // Present address
       gramNam,
-      dakghor,
+      para,
       thana,
-      jela,
+      district,
+      division,
       landmark,
+      // Permanent address
       permanentSameAsPresent,
       permanentGramNam,
-      permanentDakghor,
+      permanentPara,
       permanentThana,
-      permanentJela,
+      permanentDistrict,
+      permanentDivision,
+      // Education
       qualification,
       educationComplete,
       degree,
       currentYear,
+      // Student
       studentClass,
+      studentSubject,
+      roll,
+      schoolName,
       password,
     } = req.body;
 
-    // Uniqueness checks (exclude self)
+    // Uniqueness checks
     if (email) {
       const conflict = await User.findOne({
         email: email.toLowerCase(),
@@ -193,51 +204,89 @@ export const updateProfile = async (req, res) => {
       permanentSameAsPresent === true || permanentSameAsPresent === "true";
 
     const update = {};
+
+    // Identity
     if (name !== undefined) update.name = name.trim();
     if (fatherName !== undefined)
       update.fatherName = fatherName?.trim() || null;
+    if (motherName !== undefined)
+      update.motherName = motherName?.trim() || null;
     if (phone !== undefined) update.phone = phone?.trim() || null;
     if (email !== undefined) update.email = email?.toLowerCase().trim() || null;
     if (gender !== undefined) update.gender = gender || null;
+    if (dateOfBirth !== undefined)
+      update.dateOfBirth = dateOfBirth ? new Date(dateOfBirth) : null;
+    if (religion !== undefined) update.religion = religion || null;
+    if (emergencyContact !== undefined)
+      update.emergencyContact = emergencyContact?.trim() || null;
     if (password) update.password = password;
+
+    // Present address
     if (gramNam !== undefined) update.gramNam = gramNam?.trim() || null;
-    if (dakghor !== undefined) update.dakghor = dakghor?.trim() || null;
+    if (para !== undefined) update.para = para?.trim() || null;
     if (thana !== undefined) update.thana = thana?.trim() || null;
-    if (jela !== undefined) update.jela = jela?.trim() || null;
+    if (district !== undefined) update.district = district?.trim() || null;
+    if (division !== undefined) update.division = division?.trim() || null;
     if (landmark !== undefined) update.landmark = landmark?.trim() || null;
 
+    // Permanent address
     if (permanentSameAsPresent !== undefined) {
       update.permanentSameAsPresent = isSame;
       update.permanentGramNam = isSame
         ? (gramNam?.trim() ?? current.gramNam)
         : (permanentGramNam?.trim() ?? null);
-      update.permanentDakghor = isSame
-        ? (dakghor?.trim() ?? current.dakghor)
-        : (permanentDakghor?.trim() ?? null);
+      update.permanentPara = isSame
+        ? (para?.trim() ?? current.para)
+        : (permanentPara?.trim() ?? null);
       update.permanentThana = isSame
         ? (thana?.trim() ?? current.thana)
         : (permanentThana?.trim() ?? null);
-      update.permanentJela = isSame
-        ? (jela?.trim() ?? current.jela)
-        : (permanentJela?.trim() ?? null);
+      update.permanentDistrict = isSame
+        ? (district?.trim() ?? current.district)
+        : (permanentDistrict?.trim() ?? null);
+      update.permanentDivision = isSame
+        ? (division?.trim() ?? current.division)
+        : (permanentDivision?.trim() ?? null);
     } else {
       if (permanentGramNam !== undefined)
         update.permanentGramNam = permanentGramNam?.trim() || null;
-      if (permanentDakghor !== undefined)
-        update.permanentDakghor = permanentDakghor?.trim() || null;
+      if (permanentPara !== undefined)
+        update.permanentPara = permanentPara?.trim() || null;
       if (permanentThana !== undefined)
         update.permanentThana = permanentThana?.trim() || null;
-      if (permanentJela !== undefined)
-        update.permanentJela = permanentJela?.trim() || null;
+      if (permanentDistrict !== undefined)
+        update.permanentDistrict = permanentDistrict?.trim() || null;
+      if (permanentDivision !== undefined)
+        update.permanentDivision = permanentDivision?.trim() || null;
     }
 
+    // Education
     if (qualification !== undefined)
       update.qualification = qualification?.trim() || null;
     if (educationComplete !== undefined)
       update.educationComplete = educationComplete;
     if (degree !== undefined) update.degree = degree ?? null;
     if (currentYear !== undefined) update.currentYear = currentYear ?? null;
+
+    // Student specific
+    const CLASSES_WITH_SUBJECT = [
+      "নবম শ্রেণি",
+      "দশম শ্রেণি",
+      "একাদশ শ্রেণি",
+      "দ্বাদশ শ্রেণি",
+    ];
     if (studentClass !== undefined) update.studentClass = studentClass ?? null;
+    if (studentSubject !== undefined)
+      update.studentSubject = studentSubject ?? null;
+    // If class changed to one that doesn't need a subject, clear it
+    if (
+      studentClass !== undefined &&
+      !CLASSES_WITH_SUBJECT.includes(studentClass)
+    )
+      update.studentSubject = null;
+    if (roll !== undefined) update.roll = roll?.trim() || null;
+    if (schoolName !== undefined)
+      update.schoolName = schoolName?.trim() || null;
 
     const user = await User.findOneAndUpdate({ slug }, update, {
       new: true,

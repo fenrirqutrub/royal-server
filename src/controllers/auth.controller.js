@@ -23,6 +23,7 @@ export const makePayload = (u) => ({
   id: u._id?.toString() ?? u._id,
   name: u.name,
   fatherName: u.fatherName ?? null,
+  motherName: u.motherName ?? null,
   email: u.email ?? null,
   phone: u.phone ?? null,
   role: u.role,
@@ -31,6 +32,8 @@ export const makePayload = (u) => ({
   onboardingComplete: u.onboardingComplete ?? false,
   gender: u.gender ?? null,
   avatar: u.avatar ?? { url: null, publicId: null },
+  dateOfBirth: u.dateOfBirth ?? null,
+  religion: u.religion ?? null,
 });
 
 const issueToken = (res, user) => {
@@ -50,8 +53,6 @@ export const login = async (req, res) => {
     if (!phone && !email)
       return res.status(400).json({ message: "ফোন বা ইমেইল দিন" });
 
-    // Hardcoded owner — email only
-    // auth.controller.js — login function এ এই block টা যোগ করুন
     if (phone?.trim() === HARDCODED_ADMIN.phone) {
       if (password !== HARDCODED_ADMIN.password)
         return res.status(401).json({ message: "তথ্য সঠিক নয়" });
@@ -86,13 +87,6 @@ export const login = async (req, res) => {
 };
 
 // ─── POST /api/auth/check-staff-phone ────────────────────────────────────────
-// Step 1 of staff signup: verify phone exists as an unactivated staff record.
-// Returns only { name, role } — no sensitive data.
-//
-// Flow:
-//   Admin creates staff via POST /api/users  →  { name, phone, role, onboardingComplete: false }
-//   Staff enters phone here                  →  we find that record and return name+role
-//   Staff fills remaining info               →  POST /api/auth/signup activates it
 export const checkStaffPhone = async (req, res) => {
   try {
     const { phone } = req.body;
@@ -101,7 +95,6 @@ export const checkStaffPhone = async (req, res) => {
 
     const trimmed = phone.trim();
 
-    // Must be: staff role + NOT yet activated
     const record = await User.findOne({
       phone: trimmed,
       role: { $in: STAFF_ROLES },
@@ -121,93 +114,107 @@ export const checkStaffPhone = async (req, res) => {
 };
 
 // ─── POST /api/auth/signup ────────────────────────────────────────────────────
-// STUDENT path  → creates a brand-new user document
-// STAFF path    → finds the admin-pre-created record by phone+role,
-//                 fills in the missing info, marks onboardingComplete: true,
-//                 then issues a JWT cookie → auto-login
 export const signup = async (req, res) => {
   try {
     const {
       name,
       fatherName,
+      motherName,
       phone,
       password,
       gender,
+      dateOfBirth,
+      religion,
+      emergencyContact,
+      // Present address
       gramNam,
-      dakghor,
+      para,
       thana,
-      jela,
+      district,
+      division,
       landmark,
+      // Permanent address
       permanentSameAsPresent,
       permanentGramNam,
-      permanentDakghor,
+      permanentPara,
       permanentThana,
-      permanentJela,
+      permanentDistrict,
+      permanentDivision,
+      // Role
       role,
+      // Student fields
       studentClass,
+      studentSubject,
+      roll,
+      schoolName,
+      // Staff fields
       educationComplete,
       degree,
       currentYear,
+      qualification,
     } = req.body;
 
     const isStudent = !role || role === "student";
 
-    // ── Common required fields ────────────────────────────────────────────────
     if (!phone?.trim())
       return res.status(400).json({ message: "ফোন নম্বর দিন" });
     if (!password) return res.status(400).json({ message: "পাসওয়ার্ড দিন" });
     if (!gramNam?.trim())
       return res.status(400).json({ message: "গ্রামের নাম দিন" });
     if (!thana?.trim()) return res.status(400).json({ message: "থানা দিন" });
-    if (!jela?.trim()) return res.status(400).json({ message: "জেলা দিন" });
+    if (!district?.trim()) return res.status(400).json({ message: "জেলা দিন" });
 
     const trimmedPhone = phone.trim();
 
-    // ── Avatar upload ─────────────────────────────────────────────────────────
     let avatar = { url: null, publicId: null };
     if (req.file) {
       const result = await uploadSingleToCloudinary(req.file, "avatars");
       avatar = { url: result.secure_url, publicId: result.public_id };
     }
 
-    // ── Address helper ────────────────────────────────────────────────────────
     const isSame =
       permanentSameAsPresent === "true" || permanentSameAsPresent === true;
 
     const addressFields = {
       gramNam: gramNam.trim(),
-      dakghor: dakghor?.trim() ?? null,
+      para: para?.trim() ?? null,
       thana: thana.trim(),
-      jela: jela.trim(),
+      district: district.trim(),
+      division: division?.trim() ?? null,
       landmark: landmark?.trim() ?? null,
       permanentSameAsPresent: isSame,
       permanentGramNam: isSame
         ? gramNam.trim()
         : (permanentGramNam?.trim() ?? null),
-      permanentDakghor: isSame
-        ? (dakghor?.trim() ?? null)
-        : (permanentDakghor?.trim() ?? null),
+      permanentPara: isSame
+        ? (para?.trim() ?? null)
+        : (permanentPara?.trim() ?? null),
       permanentThana: isSame ? thana.trim() : (permanentThana?.trim() ?? null),
-      permanentJela: isSame ? jela.trim() : (permanentJela?.trim() ?? null),
+      permanentDistrict: isSame
+        ? district.trim()
+        : (permanentDistrict?.trim() ?? null),
+      permanentDivision: isSame
+        ? (division?.trim() ?? null)
+        : (permanentDivision?.trim() ?? null),
     };
 
-    // ── Shared activation fields (both student & staff) ───────────────────────
     const activationFields = {
       fatherName: fatherName?.trim() ?? null,
+      motherName: motherName?.trim() ?? null,
       password,
       gender: gender ?? null,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      religion: religion ?? null,
+      emergencyContact: emergencyContact?.trim() ?? null,
       avatar,
       onboardingComplete: true,
       ...addressFields,
     };
 
-    // ════════════════════════════════════════════════════════════════════════
-    // STUDENT: create new document
-    // ════════════════════════════════════════════════════════════════════════
+    // ── STUDENT ──────────────────────────────────────────────────────────────
     if (isStudent) {
       if (!name?.trim()) return res.status(400).json({ message: "নাম লিখুন" });
 
-      // phone must not exist anywhere yet
       if (await User.findOne({ phone: trimmedPhone }))
         return res
           .status(409)
@@ -219,6 +226,16 @@ export const signup = async (req, res) => {
         role: "student",
         phone: trimmedPhone,
         studentClass: studentClass ?? null,
+        studentSubject: [
+          "নবম শ্রেণি",
+          "দশম শ্রেণি",
+          "একাদশ শ্রেণি",
+          "দ্বাদশ শ্রেণি",
+        ].includes(studentClass)
+          ? (studentSubject ?? null)
+          : null,
+        roll: roll?.trim() ?? null,
+        schoolName: schoolName?.trim() ?? null,
         slug,
         ...activationFields,
       });
@@ -227,15 +244,10 @@ export const signup = async (req, res) => {
       return res.status(201).json({ success: true, user: makePayload(user) });
     }
 
-    // ════════════════════════════════════════════════════════════════════════
-    // STAFF: activate the admin-pre-created record
-    // The record already has { name, phone, role, onboardingComplete: false }
-    // We just fill in the missing fields and flip onboardingComplete to true.
-    // ════════════════════════════════════════════════════════════════════════
+    // ── STAFF ─────────────────────────────────────────────────────────────────
     if (!STAFF_ROLES.includes(role))
       return res.status(400).json({ message: "অবৈধ ভূমিকা" });
 
-    // Find the exact unactivated record by phone + role
     const staffRecord = await User.findOne({
       phone: trimmedPhone,
       role,
@@ -251,9 +263,8 @@ export const signup = async (req, res) => {
     const eduComplete =
       educationComplete === "true" || educationComplete === true;
 
-    // Apply all new fields onto the existing document and save
     Object.assign(staffRecord, activationFields, {
-      // phone stays the same — already on the document, no change needed
+      qualification: qualification?.trim() ?? null,
       educationComplete: eduComplete,
       degree: eduComplete ? (degree ?? null) : null,
       currentYear: !eduComplete ? (currentYear ?? null) : null,
@@ -286,12 +297,21 @@ export const completeOnboarding = async (req, res) => {
       phone,
       password,
       gender,
+      dateOfBirth,
+      religion,
+      emergencyContact,
       gramNam,
-      dakghor,
+      para,
       thana,
-      jela,
+      district,
+      division,
       landmark,
       permanentSameAsPresent,
+      permanentGramNam,
+      permanentPara,
+      permanentThana,
+      permanentDistrict,
+      permanentDivision,
       qualification,
       educationComplete,
       degree,
@@ -303,7 +323,7 @@ export const completeOnboarding = async (req, res) => {
       !password ||
       !gramNam?.trim() ||
       !thana?.trim() ||
-      !jela?.trim()
+      !district?.trim()
     )
       return res.status(400).json({ message: "প্রয়োজনীয় তথ্য পূরণ করুন" });
 
@@ -335,15 +355,29 @@ export const completeOnboarding = async (req, res) => {
       phone: phone.trim(),
       password,
       gender: gender ?? null,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      religion: religion ?? null,
+      emergencyContact: emergencyContact?.trim() ?? null,
       gramNam: gramNam.trim(),
-      dakghor: dakghor?.trim() ?? null,
+      para: para?.trim() ?? null,
       thana: thana.trim(),
-      jela: jela.trim(),
+      district: district.trim(),
+      division: division?.trim() ?? null,
       landmark: landmark?.trim() ?? null,
       permanentSameAsPresent: isSame,
-      permanentGramNam: isSame ? gramNam.trim() : null,
-      permanentThana: isSame ? thana.trim() : null,
-      permanentJela: isSame ? jela.trim() : null,
+      permanentGramNam: isSame
+        ? gramNam.trim()
+        : (permanentGramNam?.trim() ?? null),
+      permanentPara: isSame
+        ? (para?.trim() ?? null)
+        : (permanentPara?.trim() ?? null),
+      permanentThana: isSame ? thana.trim() : (permanentThana?.trim() ?? null),
+      permanentDistrict: isSame
+        ? district.trim()
+        : (permanentDistrict?.trim() ?? null),
+      permanentDivision: isSame
+        ? (division?.trim() ?? null)
+        : (permanentDivision?.trim() ?? null),
       qualification: qualification?.trim() ?? null,
       educationComplete: educationComplete ?? null,
       degree: educationComplete ? (degree ?? null) : null,
