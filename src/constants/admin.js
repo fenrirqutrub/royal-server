@@ -1,0 +1,31 @@
+// src/constants/admin.js
+export const HARDCODED_ADMIN = {
+  _id: "hardcoded-admin",
+  name: "Owner",
+  email: "mib@kobita.com",
+  phone: "01700000069", // ← তোমার আসল নম্বর দাও
+  role: "owner",
+  password: "kobita",
+  isHardcoded: true,
+  slug: "X666X",
+  onboardingComplete: true,
+  gender: "পুরুষ",
+  avatar: { url: null, publicId: null },
+};
+
+export const STAFF_ROLES = ["teacher", "principal", "admin"];
+
+export const ROLE_PERMISSIONS = {
+  owner: ["admin", "principal", "teacher"],
+  admin: ["admin", "principal", "teacher"],
+  principal: ["principal", "teacher"],
+  teacher: [],
+};
+
+export const ROLE_PREFIX = {
+  student: "S",
+  teacher: "T",
+  principal: "P",
+  admin: "A",
+  owner: "O",
+};

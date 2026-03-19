@@ -25,6 +25,9 @@ export const uploadMultiple = upload.array("images", 10);
 // single image (field name: "img") — legacy single upload
 export const uploadSingle = upload.single("img");
 
+// এই line যোগ করুন:
+export const uploadAvatar = upload.single("avatar");
+
 // single image (field name: "image") — used by avatar upload
 export const uploadSingleImage = upload.single("image");
 

@@ -1,6 +1,6 @@
 // src/controllers/weekly.exam.controller.js
 import WeeklyExam from "../models/weekly.exam.model.js";
-import Teacher from "../models/teacher.model.js";
+import Teacher from "../models/user.model.js";
 import {
   uploadMultipleToCloudinary,
   deleteFromCloudinary,
