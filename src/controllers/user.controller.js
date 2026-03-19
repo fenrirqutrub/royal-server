@@ -53,7 +53,7 @@ export const createUser = async (req, res) => {
       name: name.trim(),
       phone: phone.trim(),
       role,
-      password: phone.trim(),
+      password: phone.trim(), // temp — hashed by pre-save hook
       slug,
       onboardingComplete: false,
     });
@@ -84,7 +84,7 @@ export const updateUser = async (req, res) => {
     if (phone) update.phone = phone.trim();
     if (role) {
       update.role = role;
-      update.password = phone?.trim() ?? role;
+      update.password = phone?.trim() ?? role; // hashed by pre-findOneAndUpdate hook
       update.slug = await buildSlug(role, id);
     }
 
@@ -219,7 +219,7 @@ export const updateProfile = async (req, res) => {
     if (religion !== undefined) update.religion = religion || null;
     if (emergencyContact !== undefined)
       update.emergencyContact = emergencyContact?.trim() || null;
-    if (password) update.password = password;
+    if (password) update.password = password; // hashed by pre-findOneAndUpdate hook
 
     // Present address
     if (gramNam !== undefined) update.gramNam = gramNam?.trim() || null;

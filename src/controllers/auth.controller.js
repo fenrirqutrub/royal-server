@@ -71,7 +71,7 @@ export const login = async (req, res) => {
       ? { phone: phone.trim() }
       : { email: email.toLowerCase() };
     const user = await User.findOne(query);
-    if (!user || user.password !== password)
+    if (!user || !(await user.verifyPassword(password)))
       return res.status(401).json({ message: "ফোন নম্বর বা পাসওয়ার্ড ভুল" });
 
     const token = jwt.sign(
@@ -201,7 +201,7 @@ export const signup = async (req, res) => {
     const activationFields = {
       fatherName: fatherName?.trim() ?? null,
       motherName: motherName?.trim() ?? null,
-      password,
+      password, // hashed by pre-save hook in model
       gender: gender ?? null,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
       religion: religion ?? null,
@@ -353,7 +353,7 @@ export const completeOnboarding = async (req, res) => {
 
     const update = {
       phone: phone.trim(),
-      password,
+      password, // hashed by pre-findOneAndUpdate hook in model
       gender: gender ?? null,
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
       religion: religion ?? null,
