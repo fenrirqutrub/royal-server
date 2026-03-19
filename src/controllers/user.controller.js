@@ -84,7 +84,7 @@ export const updateUser = async (req, res) => {
     if (phone) update.phone = phone.trim();
     if (role) {
       update.role = role;
-      update.password = phone?.trim() ?? role; // hashed by pre-findOneAndUpdate hook
+      update.password = phone?.trim() ?? role;
       update.slug = await buildSlug(role, id);
     }
 
@@ -153,26 +153,22 @@ export const updateProfile = async (req, res) => {
       dateOfBirth,
       religion,
       emergencyContact,
-      // Present address
       gramNam,
       para,
       thana,
       district,
       division,
       landmark,
-      // Permanent address
       permanentSameAsPresent,
       permanentGramNam,
       permanentPara,
       permanentThana,
       permanentDistrict,
       permanentDivision,
-      // Education
       qualification,
       educationComplete,
       degree,
       currentYear,
-      // Student
       studentClass,
       studentSubject,
       roll,
@@ -180,7 +176,6 @@ export const updateProfile = async (req, res) => {
       password,
     } = req.body;
 
-    // Uniqueness checks
     if (email) {
       const conflict = await User.findOne({
         email: email.toLowerCase(),
@@ -202,10 +197,8 @@ export const updateProfile = async (req, res) => {
 
     const isSame =
       permanentSameAsPresent === true || permanentSameAsPresent === "true";
-
     const update = {};
 
-    // Identity
     if (name !== undefined) update.name = name.trim();
     if (fatherName !== undefined)
       update.fatherName = fatherName?.trim() || null;
@@ -219,9 +212,8 @@ export const updateProfile = async (req, res) => {
     if (religion !== undefined) update.religion = religion || null;
     if (emergencyContact !== undefined)
       update.emergencyContact = emergencyContact?.trim() || null;
-    if (password) update.password = password; // hashed by pre-findOneAndUpdate hook
+    if (password) update.password = password;
 
-    // Present address
     if (gramNam !== undefined) update.gramNam = gramNam?.trim() || null;
     if (para !== undefined) update.para = para?.trim() || null;
     if (thana !== undefined) update.thana = thana?.trim() || null;
@@ -229,7 +221,6 @@ export const updateProfile = async (req, res) => {
     if (division !== undefined) update.division = division?.trim() || null;
     if (landmark !== undefined) update.landmark = landmark?.trim() || null;
 
-    // Permanent address
     if (permanentSameAsPresent !== undefined) {
       update.permanentSameAsPresent = isSame;
       update.permanentGramNam = isSame
@@ -260,7 +251,6 @@ export const updateProfile = async (req, res) => {
         update.permanentDivision = permanentDivision?.trim() || null;
     }
 
-    // Education
     if (qualification !== undefined)
       update.qualification = qualification?.trim() || null;
     if (educationComplete !== undefined)
@@ -268,7 +258,6 @@ export const updateProfile = async (req, res) => {
     if (degree !== undefined) update.degree = degree ?? null;
     if (currentYear !== undefined) update.currentYear = currentYear ?? null;
 
-    // Student specific
     const CLASSES_WITH_SUBJECT = [
       "নবম শ্রেণি",
       "দশম শ্রেণি",
@@ -278,7 +267,6 @@ export const updateProfile = async (req, res) => {
     if (studentClass !== undefined) update.studentClass = studentClass ?? null;
     if (studentSubject !== undefined)
       update.studentSubject = studentSubject ?? null;
-    // If class changed to one that doesn't need a subject, clear it
     if (
       studentClass !== undefined &&
       !CLASSES_WITH_SUBJECT.includes(studentClass)
@@ -303,12 +291,33 @@ export const updateProfile = async (req, res) => {
 export const updateAvatar = async (req, res) => {
   try {
     const { slug } = req.params;
-    if (slug === HARDCODED_ADMIN.slug)
-      return res.status(403).json({ message: "Cannot modify hardcoded admin" });
 
     if (!req.file)
       return res.status(400).json({ message: "No image file provided" });
 
+    // ── Hardcoded owner: upload to Cloudinary, update in-memory object ────────
+    if (slug === HARDCODED_ADMIN.slug) {
+      // Delete old avatar if exists
+      if (HARDCODED_ADMIN.avatar?.publicId) {
+        await deleteFromCloudinary(HARDCODED_ADMIN.avatar.publicId).catch(
+          () => {},
+        );
+      }
+
+      const result = await uploadSingleToCloudinary(req.file, "avatars");
+      // Mutate the in-memory HARDCODED_ADMIN so /api/auth/me returns updated avatar
+      HARDCODED_ADMIN.avatar = {
+        url: result.secure_url,
+        publicId: result.public_id,
+      };
+
+      return res.status(200).json({
+        success: true,
+        data: makePayload(HARDCODED_ADMIN),
+      });
+    }
+
+    // ── Normal DB user ─────────────────────────────────────────────────────────
     const user = await User.findOne({ slug });
     if (!user) return res.status(404).json({ message: "Profile not found" });
 
