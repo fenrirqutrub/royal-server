@@ -10,7 +10,10 @@ export const HARDCODED_ADMIN = {
   slug: "X666X",
   onboardingComplete: true,
   gender: "পুরুষ",
-  avatar: { url: null, publicId: null },
+  avatar: {
+    url: "https://res.cloudinary.com/ddsfmccyi/image/upload/v1773928047/avatars/uyi6c9kmtwlw8ayd6qpe.webp",
+    publicId: "owner",
+  },
 };
 
 export const STAFF_ROLES = ["teacher", "principal", "admin"];
