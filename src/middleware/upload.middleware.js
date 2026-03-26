@@ -72,7 +72,7 @@ export const validateLandscapeImage = async (req, res, next) => {
     const metadata = await sharp(req.file.buffer).metadata();
     const { width, height } = metadata;
     const aspectRatio = width / height;
-    const minAspectRatio = 1.3;
+    const minAspectRatio = 8 / 3;
 
     if (aspectRatio < minAspectRatio) {
       return res.status(400).json({
