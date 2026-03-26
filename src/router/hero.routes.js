@@ -12,25 +12,14 @@ import {
   uploadHeroImage,
   handleHeroUploadError,
   validateLandscapeImage,
-} from "../middleware/heroUpload.middleware.js";
+} from "../middleware/upload.middleware.js";
 
 const router = express.Router();
 
 // IMPORTANT: validateLandscapeImage MUST be AFTER handleUploadError
-router.post(
-  "/",
-  uploadHeroImage,
-  handleHeroUploadError,
-  validateLandscapeImage,
-  createHero,
-);
-router.put(
-  "/:id",
-  uploadHeroImage,
-  handleHeroUploadError,
-  validateLandscapeImage,
-  updateHero,
-);
+router.post("/", uploadHeroImage, handleHeroUploadError, createHero);
+router.put("/:id", uploadHeroImage, handleHeroUploadError, updateHero);
+
 router.get("/", getAllHeroes);
 router.get("/unique/:uniqueID", getHeroByUniqueId);
 router.get("/:id", getHeroById);
