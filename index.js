@@ -20,6 +20,7 @@ import noticeRoutes from "./src/router/notice.routes.js";
 import photographyRoutes from "./src/router/photography.routes.js";
 import weeklyExamRoutes from "./src/router/weekly.exam.routes.js";
 import routes from "./src/router/user.routes.js";
+import routineRoutes from "./src/router/routine.routes.js";
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -47,6 +48,8 @@ app.use("/api/weekly-exams", weeklyExamRoutes);
 
 app.use("/api/daily-lesson", dailyLessonRoutes);
 app.use("/api/notices", noticeRoutes);
+
+app.use("/api/routines", routineRoutes);
 
 // ── health check ──────────────────────────────────────────────────────────────
 app.get("/", (req, res) =>

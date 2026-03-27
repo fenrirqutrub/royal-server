@@ -25,8 +25,8 @@ export const uploadToCloudinary = async (fileBuffer, folder = "uploads") => {
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
-      reject(new Error("Cloudinary upload timed out after 60s"));
-    }, 60000);
+      reject(new Error("Cloudinary upload timed out after 120s"));
+    }, 120000);
 
     const stream = cloudinary.uploader.upload_stream(
       { folder, resource_type: "image", format: "webp" }, // ✅ format: webp
