@@ -1,7 +1,5 @@
 // src/models/daily.lesson.model.js
 
-// src/models/daily.lesson.model.js
-
 import mongoose from "mongoose";
 
 const dailyLessonSchema = new mongoose.Schema(

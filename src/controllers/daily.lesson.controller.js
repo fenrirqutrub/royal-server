@@ -1,5 +1,4 @@
 // src/controllers/daily.lesson.controller.js
-// src/controllers/daily.lesson.controller.js
 
 import DailyLesson from "../models/daily.lesson.model.js";
 import { v2 as cloudinary } from "cloudinary";

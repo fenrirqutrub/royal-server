@@ -14,7 +14,7 @@ import {
   uploadToCloudinary,
   deleteFromCloudinary,
 } from "../config/cloudinary.js";
-import Routine from "../models/routine.model.js";
+import ExamMarks from "../models/exam.marks.model.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -37,7 +37,7 @@ const isBlankPage = async (buffer, threshold = 250) => {
 
 // ── PDF buffer → [ { buffer, pageNumber } ] ───────────────────────────────────
 const pdfToPngBuffers = async (pdfBuffer) => {
-  const tempDir = mkdtempSync(join(tmpdir(), "routine-"));
+  const tempDir = mkdtempSync(join(tmpdir(), "exammarks-"));
   const pdfPath = join(tempDir, "input.pdf");
 
   try {
@@ -84,8 +84,8 @@ const uploadWithRetry = async (buffer, folder, pageNumber, retries = 3) => {
   }
 };
 
-// ─── POST /api/routines ───────────────────────────────────────────────────────
-export const createRoutine = async (req, res) => {
+// ─── POST /api/exam-marks ─────────────────────────────────────────────────────
+export const createExamMarks = async (req, res) => {
   try {
     console.log(
       "📥 req.file:",
@@ -133,7 +133,7 @@ export const createRoutine = async (req, res) => {
     for (let i = 0; i < nonBlankPages.length; i++) {
       const { buffer } = nonBlankPages[i];
       const pageNumber = i + 1; // sequential after blank removal
-      const result = await uploadWithRetry(buffer, "routines", pageNumber);
+      const result = await uploadWithRetry(buffer, "exam-marks", pageNumber);
       uploadedPages.push({
         pageNumber,
         url: result.secure_url,
@@ -143,88 +143,88 @@ export const createRoutine = async (req, res) => {
 
     console.log(`✅ All ${uploadedPages.length} pages uploaded`);
 
-    const routine = await Routine.create({
+    const examMarks = await ExamMarks.create({
       pages: uploadedPages,
       totalPages: uploadedPages.length,
     });
 
     return res.status(201).json({
       success: true,
-      message: "Routine created successfully",
-      data: routine,
+      message: "Exam marks created successfully",
+      data: examMarks,
     });
   } catch (error) {
-    console.error("❌ createRoutine error:", error.message);
+    console.error("❌ createExamMarks error:", error.message);
     return res.status(500).json({
       success: false,
-      message: "Failed to create routine",
+      message: "Failed to create exam marks",
       error: error.message,
     });
   }
 };
 
-// ─── GET /api/routines ────────────────────────────────────────────────────────
-export const getAllRoutines = async (req, res) => {
+// ─── GET /api/exam-marks ──────────────────────────────────────────────────────
+export const getAllExamMarks = async (req, res) => {
   try {
-    const routines = await Routine.find().sort({ createdAt: -1 });
-    return res.status(200).json({ success: true, data: routines });
+    const examMarks = await ExamMarks.find().sort({ createdAt: -1 });
+    return res.status(200).json({ success: true, data: examMarks });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ─── GET /api/routines/active ─────────────────────────────────────────────────
-export const getActiveRoutine = async (req, res) => {
+// ─── GET /api/exam-marks/active ───────────────────────────────────────────────
+export const getActiveExamMarks = async (req, res) => {
   try {
-    const routine = await Routine.findOne({ isActive: true }).sort({
+    const examMarks = await ExamMarks.findOne({ isActive: true }).sort({
       createdAt: -1,
     });
-    if (!routine) {
+    if (!examMarks) {
       return res
         .status(404)
-        .json({ success: false, message: "No active routine found" });
+        .json({ success: false, message: "No active exam marks found" });
     }
-    return res.status(200).json({ success: true, data: routine });
+    return res.status(200).json({ success: true, data: examMarks });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ─── DELETE /api/routines/:id ─────────────────────────────────────────────────
-export const deleteRoutine = async (req, res) => {
+// ─── DELETE /api/exam-marks/:id ───────────────────────────────────────────────
+export const deleteExamMarks = async (req, res) => {
   try {
-    const routine = await Routine.findById(req.params.id);
-    if (!routine) {
+    const examMarks = await ExamMarks.findById(req.params.id);
+    if (!examMarks) {
       return res
         .status(404)
-        .json({ success: false, message: "Routine not found" });
+        .json({ success: false, message: "Exam marks not found" });
     }
 
-    for (const page of routine.pages) {
+    for (const page of examMarks.pages) {
       await deleteFromCloudinary(page.publicId);
     }
 
-    await routine.deleteOne();
+    await examMarks.deleteOne();
     return res
       .status(200)
-      .json({ success: true, message: "Routine deleted successfully" });
+      .json({ success: true, message: "Exam marks deleted successfully" });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// ─── PATCH /api/routines/:id/toggle ──────────────────────────────────────────
-export const toggleRoutineStatus = async (req, res) => {
+// ─── PATCH /api/exam-marks/:id/toggle ────────────────────────────────────────
+export const toggleExamMarksStatus = async (req, res) => {
   try {
-    const routine = await Routine.findById(req.params.id);
-    if (!routine) {
+    const examMarks = await ExamMarks.findById(req.params.id);
+    if (!examMarks) {
       return res
         .status(404)
-        .json({ success: false, message: "Routine not found" });
+        .json({ success: false, message: "Exam marks not found" });
     }
-    routine.isActive = !routine.isActive;
-    await routine.save();
-    return res.status(200).json({ success: true, data: routine });
+    examMarks.isActive = !examMarks.isActive;
+    await examMarks.save();
+    return res.status(200).json({ success: true, data: examMarks });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
