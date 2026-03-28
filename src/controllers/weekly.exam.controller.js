@@ -35,7 +35,6 @@ const migrateMissingSlugs = async () => {
         teacherSlug ?? doc._id.toString().slice(-4),
       );
 
-      // only update if something is wrong
       if (doc.slug !== correctSlug || doc.teacherSlug !== teacherSlug) {
         await WeeklyExam.findByIdAndUpdate(doc._id, {
           slug: correctSlug,
@@ -82,24 +81,22 @@ export const createWeeklyExam = async (req, res) => {
       class: cls,
       mark,
       ExamNumber,
+      chapterNumber,
       topics,
     } = req.body;
 
-    // resolve teacherSlug; if teacher name is empty, look it up from slug
     const teacherSlug = await resolveTeacherSlug(rawSlug, teacher);
     if (!teacher?.trim() && teacherSlug) {
       const found = await Teacher.findOne({ slug: teacherSlug }).select("name");
       if (found) teacher = found.name;
     }
 
-    // upload images
     let images = [];
     if (req.files?.length) {
       const uploadResults = await uploadMultipleToCloudinary(
         req.files,
         "weekly-exams",
       );
-
       images = uploadResults.map((r) => ({
         imageUrl: r.secure_url,
         publicId: r.public_id,
@@ -115,6 +112,7 @@ export const createWeeklyExam = async (req, res) => {
       class: cls,
       mark: Number(mark),
       ExamNumber,
+      chapterNumber,
       topics,
       images,
       slug,
@@ -138,6 +136,7 @@ export const updateWeeklyExam = async (req, res) => {
       class: cls,
       mark,
       ExamNumber,
+      chapterNumber,
       topics,
     } = req.body;
 
@@ -150,6 +149,7 @@ export const updateWeeklyExam = async (req, res) => {
       ...(cls && { class: cls }),
       ...(mark && { mark: Number(mark) }),
       ...(ExamNumber && { ExamNumber }),
+      ...(chapterNumber && { chapterNumber }),
       ...(topics && { topics }),
     };
 
@@ -158,7 +158,6 @@ export const updateWeeklyExam = async (req, res) => {
         req.files,
         "weekly-exams",
       );
-      // updateWeeklyExam তেও একই
       update.images = uploadResults.map((r) => ({
         imageUrl: r.secure_url,
         publicId: r.public_id,

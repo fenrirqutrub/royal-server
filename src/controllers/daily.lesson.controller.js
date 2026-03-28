@@ -1,17 +1,6 @@
 // src/controllers/daily.lesson.controller.js
 
 import DailyLesson from "../models/daily.lesson.model.js";
-import { v2 as cloudinary } from "cloudinary";
-import streamifier from "streamifier";
-
-// ── Cloudinary stream upload helper ──────────────────────────────────────────
-const uploadToCloudinary = (buffer, folder = "daily-lessons") =>
-  new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream((error, result) =>
-      error ? reject(error) : resolve(result),
-    );
-    streamifier.createReadStream(buffer).pipe(stream);
-  });
 
 // ── POST /api/daily-lesson ────────────────────────────────────────────────────
 export const createDailyLesson = async (req, res) => {
@@ -80,15 +69,35 @@ export const getDailyLessonById = async (req, res) => {
 // ── PATCH /api/daily-lesson/:id ───────────────────────────────────────────────
 export const updateDailyLesson = async (req, res) => {
   try {
+    // Support both JSON body and multipart FormData
+    const body = req.body ?? {};
+
+    const updateFields = {};
+    if (body.subject) updateFields.subject = body.subject;
+    if (body.class) updateFields.class = body.class;
+    if (body.chapterNumber) updateFields.chapterNumber = body.chapterNumber;
+    if (body.topics) updateFields.topics = body.topics;
+    if (body.teacher) updateFields.teacher = body.teacher;
+    if (body.teacherSlug !== undefined)
+      updateFields.teacherSlug = body.teacherSlug || null;
+
+    if (Object.keys(updateFields).length === 0) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No fields to update" });
+    }
+
     const lesson = await DailyLesson.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: updateFields },
       { new: true, runValidators: true },
     );
+
     if (!lesson)
       return res
         .status(404)
         .json({ success: false, message: "Lesson not found" });
+
     res.json({ success: true, data: lesson });
   } catch (err) {
     console.error("❌ updateDailyLesson:", err);
