@@ -1,5 +1,6 @@
 // src/controllers/daily.lesson.controller.js
 
+import { isManager } from "../middleware/auth.middleware.js";
 import DailyLesson from "../models/daily.lesson.model.js";
 
 // ── POST /api/daily-lesson ────────────────────────────────────────────────────
@@ -37,11 +38,16 @@ export const createDailyLesson = async (req, res) => {
 // ── GET /api/daily-lesson ─────────────────────────────────────────────────────
 export const getAllDailyLessons = async (req, res) => {
   try {
-    const { class: cls, subject, teacherSlug } = req.query;
     const filter = {};
-    if (cls) filter.class = cls;
-    if (subject) filter.subject = subject;
-    if (teacherSlug) filter.teacherSlug = teacherSlug;
+
+    // teacher হলে শুধু নিজের data
+    if (!isManager(req.user.role)) {
+      filter.teacherSlug = req.user.slug;
+    } else {
+      if (req.query.class) filter.class = req.query.class;
+      if (req.query.subject) filter.subject = req.query.subject;
+      if (req.query.teacherSlug) filter.teacherSlug = req.query.teacherSlug;
+    }
 
     const lessons = await DailyLesson.find(filter).sort({ createdAt: -1 });
     res.json({ success: true, data: lessons });

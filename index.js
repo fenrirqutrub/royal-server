@@ -1,4 +1,4 @@
-// index.js — add these lines to your existing file
+// index.js
 
 process.on("uncaughtException", (err) =>
   console.error("💥 UNCAUGHT EXCEPTION:", err),

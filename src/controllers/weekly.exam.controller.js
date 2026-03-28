@@ -5,6 +5,7 @@ import {
   uploadMultipleToCloudinary,
   deleteFromCloudinary,
 } from "../config/cloudinary.js";
+import { isManager } from "../middleware/auth.middleware.js";
 
 // ── helper: resolve teacherSlug from name if not provided ────────────────────
 const resolveTeacherSlug = async (rawSlug, teacherName) => {
@@ -49,10 +50,17 @@ const migrateMissingSlugs = async () => {
 export const getAllWeeklyExams = async (req, res) => {
   try {
     await migrateMissingSlugs();
+
     const filter = {};
-    if (req.query.teacherSlug) {
+
+    // teacher হলে শুধু নিজের data
+    if (!isManager(req.user.role)) {
+      filter.teacherSlug = req.user.slug;
+    } else if (req.query.teacherSlug) {
+      // manager চাইলে specific teacher filter করতে পারবে
       filter.teacherSlug = req.query.teacherSlug;
     }
+
     const exams = await WeeklyExam.find(filter).sort({ createdAt: -1 });
     return res.status(200).json(exams);
   } catch (err) {

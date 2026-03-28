@@ -25,8 +25,9 @@ const issueToken = (user, isHardcoded = false, fingerprint = "") => {
     {
       id: user._id?.toString() ?? user._id,
       role: user.role,
+      slug: user.slug ?? null,
       isHardcoded,
-      fp: hashFingerprint(fingerprint), // ✅ device fingerprint hash
+      fp: hashFingerprint(fingerprint),
     },
     JWT_SECRET,
     { expiresIn: TOKEN_EXPIRY },
