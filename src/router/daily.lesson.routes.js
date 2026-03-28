@@ -21,7 +21,7 @@ const upload = multer({
 });
 
 router.post("/", upload.array("images", 10), createDailyLesson);
-router.get("/", authenticate, getAllDailyLessons); // ✅ authenticate যোগ হলো
+router.get("/", authenticate, getAllDailyLessons);
 router.get("/:id", getDailyLessonById);
 router.patch("/:id", updateDailyLesson);
 router.delete("/:id", deleteDailyLesson);

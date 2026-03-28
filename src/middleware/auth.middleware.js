@@ -1,3 +1,5 @@
+// src/middleware/auth.middleware.js
+
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { HARDCODED_ADMIN } from "../constants/admin.js";
@@ -29,12 +31,6 @@ export const authenticate = (req, res, next) => {
 
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // fingerprint check
-    const currentFp = hashFingerprint(getFingerprint(req));
-    if (decoded.fp && decoded.fp !== currentFp)
-      return res.status(401).json({ message: "সেশন মেয়াদোত্তীর্ণ" });
-
-    // hardcoded admin হলে HARDCODED_ADMIN থেকে slug নাও
     if (decoded.isHardcoded) {
       req.user = {
         id: HARDCODED_ADMIN._id,
@@ -53,6 +49,7 @@ export const authenticate = (req, res, next) => {
 
     next();
   } catch (err) {
+    console.log("❌ JWT verify failed:", err.message);
     return res.status(401).json({ message: "সেশন মেয়াদোত্তীর্ণ" });
   }
 };

@@ -1,3 +1,5 @@
+// src/controllers/auth.controller.js
+
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import User from "../models/user.model.js";
@@ -156,11 +158,13 @@ export const login = async (req, res) => {
     if (phone?.trim() === HARDCODED_ADMIN.phone) {
       if (password !== HARDCODED_ADMIN.password)
         return res.status(401).json({ message: "তথ্য সঠিক নয়" });
+
       const token = issueToken(
-        { _id: HARDCODED_ADMIN._id, role: "owner" },
+        { _id: HARDCODED_ADMIN._id, role: "owner", slug: HARDCODED_ADMIN.slug },
         true,
         fp,
       );
+
       return res.status(200).json({
         success: true,
         token,

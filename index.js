@@ -1,4 +1,5 @@
 // index.js
+import "dotenv/config";
 
 process.on("uncaughtException", (err) =>
   console.error("💥 UNCAUGHT EXCEPTION:", err),
@@ -6,9 +7,6 @@ process.on("uncaughtException", (err) =>
 process.on("unhandledRejection", (reason) =>
   console.error("💥 UNHANDLED REJECTION:", reason),
 );
-
-import dotenv from "dotenv";
-dotenv.config();
 
 import cookieParser from "cookie-parser";
 import express from "express";
@@ -30,7 +28,7 @@ const port = process.env.PORT || 5000;
 app.use(corsMiddleware);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser()); // ✅ NEW — must be before routes
+app.use(cookieParser());
 
 // request logger
 app.use((req, res, next) => {
@@ -46,10 +44,8 @@ app.use("/api", routes);
 app.use("/api/photography", photographyRoutes);
 app.use("/api/heroes", heroRoutes);
 app.use("/api/weekly-exams", weeklyExamRoutes);
-
 app.use("/api/daily-lesson", dailyLessonRoutes);
 app.use("/api/notices", noticeRoutes);
-
 app.use("/api/routines", routineRoutes);
 app.use("/api/exam-marks", examMarksRoutes);
 
@@ -82,5 +78,4 @@ app.listen(port, () => {
   console.log(`http://localhost:${port}`);
 });
 
-// ✅ Vercel এর জন্য export
 export default app;
