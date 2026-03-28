@@ -296,6 +296,7 @@ export const signup = async (req, res) => {
         name: name.trim(),
         role: "student",
         phone: trimmedPhone,
+        email: email?.toLowerCase().trim() || null,
         studentClass: studentClass ?? null,
         studentSubject: CLASSES_WITH_SUBJECT.includes(studentClass)
           ? (studentSubject ?? null)
