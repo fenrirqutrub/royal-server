@@ -42,7 +42,7 @@ const userSchema = new mongoose.Schema(
     permanentDistrict: { type: String, trim: true, default: null },
     permanentDivision: { type: String, trim: true, default: null },
 
-    qualification: { type: String, trim: true, default: null },
+    collegeName: { type: String, trim: true, default: null },
     educationComplete: { type: Boolean, default: null },
     degree: {
       type: String,
@@ -76,14 +76,14 @@ userSchema.index({ email: 1 }, { unique: true, sparse: true });
 const hashPassword = (plain) => bcrypt.hash(plain, SALT_ROUNDS);
 const isHashed = (pw) => typeof pw === "string" && pw.startsWith("$2b$");
 
-// ─── Pre-save hook (Mongoose 7+: async, no next param) ────────────────────────
+// ─── Pre-save hook ────────────────────────────────────────────────────────────
 userSchema.pre("save", async function () {
   if (!this.isModified("password")) return;
   if (isHashed(this.password)) return;
   this.password = await hashPassword(this.password);
 });
 
-// ─── Pre-update hook (Mongoose 7+: async, no next param) ─────────────────────
+// ─── Pre-update hook ──────────────────────────────────────────────────────────
 userSchema.pre(
   ["findOneAndUpdate", "updateOne", "updateMany"],
   async function () {
@@ -100,7 +100,6 @@ userSchema.pre(
 userSchema.methods.verifyPassword = async function (plain) {
   if (!isHashed(this.password)) {
     if (this.password !== plain) return false;
-    // Migrate plain-text to hash
     this.password = await hashPassword(plain);
     await this.save();
     return true;

@@ -53,7 +53,7 @@ export const createUser = async (req, res) => {
       name: name.trim(),
       phone: phone.trim(),
       role,
-      password: phone.trim(), // temp — hashed by pre-save hook
+      password: phone.trim(),
       slug,
       onboardingComplete: false,
     });
@@ -165,7 +165,7 @@ export const updateProfile = async (req, res) => {
       permanentThana,
       permanentDistrict,
       permanentDivision,
-      qualification,
+      collegeName,
       educationComplete,
       degree,
       currentYear,
@@ -251,8 +251,9 @@ export const updateProfile = async (req, res) => {
         update.permanentDivision = permanentDivision?.trim() || null;
     }
 
-    if (qualification !== undefined)
-      update.qualification = qualification?.trim() || null;
+    if (collegeName !== undefined)
+      // ← NEW
+      update.collegeName = collegeName?.trim() || null; // ← NEW
     if (educationComplete !== undefined)
       update.educationComplete = educationComplete;
     if (degree !== undefined) update.degree = degree ?? null;
@@ -295,29 +296,23 @@ export const updateAvatar = async (req, res) => {
     if (!req.file)
       return res.status(400).json({ message: "No image file provided" });
 
-    // ── Hardcoded owner: upload to Cloudinary, update in-memory object ────────
     if (slug === HARDCODED_ADMIN.slug) {
-      // Delete old avatar if exists
       if (HARDCODED_ADMIN.avatar?.publicId) {
         await deleteFromCloudinary(HARDCODED_ADMIN.avatar.publicId).catch(
           () => {},
         );
       }
-
       const result = await uploadSingleToCloudinary(req.file, "avatars");
-      // Mutate the in-memory HARDCODED_ADMIN so /api/auth/me returns updated avatar
       HARDCODED_ADMIN.avatar = {
         url: result.secure_url,
         publicId: result.public_id,
       };
-
       return res.status(200).json({
         success: true,
         data: makePayload(HARDCODED_ADMIN),
       });
     }
 
-    // ── Normal DB user ─────────────────────────────────────────────────────────
     const user = await User.findOne({ slug });
     if (!user) return res.status(404).json({ message: "Profile not found" });
 
