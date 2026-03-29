@@ -40,13 +40,10 @@ export const getAllDailyLessons = async (req, res) => {
   try {
     const filter = {};
 
-    // teacher হলে শুধু নিজের data
-    if (!isManager(req.user.role)) {
+    // Only filter to own lessons if the user is specifically a teacher
+    // Students, managers, owners, anonymous visitors → see ALL lessons
+    if (req.user && req.user.role === "teacher") {
       filter.teacherSlug = req.user.slug;
-    } else {
-      if (req.query.class) filter.class = req.query.class;
-      if (req.query.subject) filter.subject = req.query.subject;
-      if (req.query.teacherSlug) filter.teacherSlug = req.query.teacherSlug;
     }
 
     const lessons = await DailyLesson.find(filter).sort({ createdAt: -1 });
@@ -75,7 +72,6 @@ export const getDailyLessonById = async (req, res) => {
 // ── PATCH /api/daily-lesson/:id ───────────────────────────────────────────────
 export const updateDailyLesson = async (req, res) => {
   try {
-    // Support both JSON body and multipart FormData
     const body = req.body ?? {};
 
     const updateFields = {};

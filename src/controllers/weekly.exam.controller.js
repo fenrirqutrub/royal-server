@@ -5,7 +5,6 @@ import {
   uploadMultipleToCloudinary,
   deleteFromCloudinary,
 } from "../config/cloudinary.js";
-import { isManager } from "../middleware/auth.middleware.js";
 
 // ── helper: resolve teacherSlug from name if not provided ────────────────────
 const resolveTeacherSlug = async (rawSlug, teacherName) => {
@@ -53,11 +52,18 @@ export const getAllWeeklyExams = async (req, res) => {
 
     const filter = {};
 
-    // teacher হলে শুধু নিজের data
-    if (!isManager(req.user.role)) {
+    // Only filter to own exams if the user is specifically a teacher
+    // Students, managers, owners, anonymous visitors → see ALL exams
+    if (req.user && req.user.role === "teacher") {
       filter.teacherSlug = req.user.slug;
-    } else if (req.query.teacherSlug) {
-      // manager চাইলে specific teacher filter করতে পারবে
+    }
+
+    // Managers can still optionally filter by a specific teacher via query param
+    if (
+      req.user &&
+      ["principal", "admin", "owner"].includes(req.user.role) &&
+      req.query.teacherSlug
+    ) {
       filter.teacherSlug = req.query.teacherSlug;
     }
 
