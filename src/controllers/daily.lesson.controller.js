@@ -1,6 +1,5 @@
 // src/controllers/daily.lesson.controller.js
 
-import { isManager } from "../middleware/auth.middleware.js";
 import DailyLesson from "../models/daily.lesson.model.js";
 
 // ── POST /api/daily-lesson ────────────────────────────────────────────────────
@@ -38,15 +37,7 @@ export const createDailyLesson = async (req, res) => {
 // ── GET /api/daily-lesson ─────────────────────────────────────────────────────
 export const getAllDailyLessons = async (req, res) => {
   try {
-    const filter = {};
-
-    // Only filter to own lessons if the user is specifically a teacher
-    // Students, managers, owners, anonymous visitors → see ALL lessons
-    if (req.user && req.user.role === "teacher") {
-      filter.teacherSlug = req.user.slug;
-    }
-
-    const lessons = await DailyLesson.find(filter).sort({ createdAt: -1 });
+    const lessons = await DailyLesson.find().sort({ createdAt: -1 });
     res.json({ success: true, data: lessons });
   } catch (err) {
     console.error("❌ getAllDailyLessons:", err);

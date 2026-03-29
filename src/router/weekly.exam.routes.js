@@ -10,14 +10,12 @@ import {
   uploadMultiple,
   handleUploadError,
 } from "../middleware/upload.middleware.js";
-import { authenticate } from "../middleware/auth.middleware.js"; // ✅ নতুন
-import { authenticateOptional } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
 router
   .route("/")
-  .get(authenticateOptional, getAllWeeklyExams)
+  .get(getAllWeeklyExams)
   .post(uploadMultiple, handleUploadError, (req, res, next) => {
     createWeeklyExam(req, res, next).catch(next);
   });

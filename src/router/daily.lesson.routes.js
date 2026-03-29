@@ -1,3 +1,5 @@
+// src/router/daily.lesson.routes.js
+
 import express from "express";
 import multer from "multer";
 import {
@@ -7,7 +9,6 @@ import {
   updateDailyLesson,
   deleteDailyLesson,
 } from "../controllers/daily.lesson.controller.js";
-import { authenticateOptional } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -21,9 +22,7 @@ const upload = multer({
 });
 
 router.post("/", upload.array("images", 10), createDailyLesson);
-
-router.get("/", authenticateOptional, getAllDailyLessons);
-
+router.get("/", getAllDailyLessons);
 router.get("/:id", getDailyLessonById);
 router.patch("/:id", updateDailyLesson);
 router.delete("/:id", deleteDailyLesson);

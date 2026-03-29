@@ -49,25 +49,7 @@ const migrateMissingSlugs = async () => {
 export const getAllWeeklyExams = async (req, res) => {
   try {
     await migrateMissingSlugs();
-
-    const filter = {};
-
-    // Only filter to own exams if the user is specifically a teacher
-    // Students, managers, owners, anonymous visitors → see ALL exams
-    if (req.user && req.user.role === "teacher") {
-      filter.teacherSlug = req.user.slug;
-    }
-
-    // Managers can still optionally filter by a specific teacher via query param
-    if (
-      req.user &&
-      ["principal", "admin", "owner"].includes(req.user.role) &&
-      req.query.teacherSlug
-    ) {
-      filter.teacherSlug = req.query.teacherSlug;
-    }
-
-    const exams = await WeeklyExam.find(filter).sort({ createdAt: -1 });
+    const exams = await WeeklyExam.find().sort({ createdAt: -1 });
     return res.status(200).json(exams);
   } catch (err) {
     return res.status(500).json({ message: "Failed", error: err.message });
