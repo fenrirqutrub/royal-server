@@ -28,9 +28,15 @@ const dailyLessonSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // "chapter" or "page" — tells the frontend how to label chapterNumber
+    referenceType: {
+      type: String,
+      enum: ["chapter", "page"],
+      default: "chapter",
+    },
     chapterNumber: {
       type: String,
-      required: [true, "অধ্যায় নম্বর আবশ্যিক"],
+      required: [true, "অধ্যায়/পৃষ্ঠা নম্বর আবশ্যিক"],
       trim: true,
     },
     topics: {
@@ -44,7 +50,13 @@ const dailyLessonSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
+    date: {
+      type: Date,
+      required: [true, "তারিখ আবশ্যিক"],
+      default: Date.now,
+    },
   },
+
   { timestamps: true },
 );
 

@@ -11,9 +11,11 @@ export const createDailyLesson = async (req, res) => {
       teacherSlug,
       class: cls,
       mark,
+      referenceType,
       chapterNumber,
       topics,
       slug,
+      date,
     } = req.body;
 
     const lesson = await DailyLesson.create({
@@ -22,9 +24,11 @@ export const createDailyLesson = async (req, res) => {
       teacherSlug: teacherSlug || null,
       class: cls,
       mark: mark ? Number(mark) : 0,
+      referenceType: referenceType === "page" ? "page" : "chapter",
       chapterNumber,
       topics,
       slug: slug || null,
+      date: date ? new Date(date) : new Date(), // ← তারিখ কনভার্ট
     });
 
     res.status(201).json({ success: true, data: lesson });
@@ -64,21 +68,23 @@ export const getDailyLessonById = async (req, res) => {
 export const updateDailyLesson = async (req, res) => {
   try {
     const body = req.body ?? {};
-
     const updateFields = {};
+
     if (body.subject) updateFields.subject = body.subject;
     if (body.class) updateFields.class = body.class;
     if (body.chapterNumber) updateFields.chapterNumber = body.chapterNumber;
     if (body.topics) updateFields.topics = body.topics;
     if (body.teacher) updateFields.teacher = body.teacher;
+    if (body.referenceType)
+      updateFields.referenceType =
+        body.referenceType === "page" ? "page" : "chapter";
     if (body.teacherSlug !== undefined)
       updateFields.teacherSlug = body.teacherSlug || null;
 
-    if (Object.keys(updateFields).length === 0) {
+    if (Object.keys(updateFields).length === 0)
       return res
         .status(400)
         .json({ success: false, message: "No fields to update" });
-    }
 
     const lesson = await DailyLesson.findByIdAndUpdate(
       req.params.id,
