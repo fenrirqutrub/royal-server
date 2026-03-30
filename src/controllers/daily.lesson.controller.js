@@ -1,13 +1,14 @@
 // src/controllers/daily.lesson.controller.js
 
+import mongoose from "mongoose";
 import DailyLesson from "../models/daily.lesson.model.js";
 
-// ── POST /api/daily-lesson ────────────────────────────────────────────────────
+// ── POST /api/daily-lesson ──────────────────────────────────────
 export const createDailyLesson = async (req, res) => {
   try {
     const {
       subject,
-      teacher,
+      teacher, // ← এখন এটা User এর _id হবে
       teacherSlug,
       class: cls,
       mark,
@@ -18,9 +19,17 @@ export const createDailyLesson = async (req, res) => {
       date,
     } = req.body;
 
+    // createDailyLesson — add this before DailyLesson.create()
+    if (!teacher || !mongoose.isValidObjectId(teacher)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid teacher ID is required",
+      });
+    }
+
     const lesson = await DailyLesson.create({
       subject,
-      teacher,
+      teacher, // ← ObjectId
       teacherSlug: teacherSlug || null,
       class: cls,
       mark: mark ? Number(mark) : 0,
@@ -28,20 +37,28 @@ export const createDailyLesson = async (req, res) => {
       chapterNumber,
       topics,
       slug: slug || null,
-      date: date ? new Date(date) : new Date(), // ← তারিখ কনভার্ট
+      date: date ? new Date(date) : new Date(),
     });
 
-    res.status(201).json({ success: true, data: lesson });
+    // create এর পর populate করে return করো
+    const populated = await DailyLesson.findById(lesson._id).populate(
+      "teacher",
+      "name avatar role slug",
+    );
+
+    res.status(201).json({ success: true, data: populated });
   } catch (err) {
     console.error("❌ createDailyLesson:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
-// ── GET /api/daily-lesson ─────────────────────────────────────────────────────
+// ── GET /api/daily-lesson ───────────────────────────────────────
 export const getAllDailyLessons = async (req, res) => {
   try {
-    const lessons = await DailyLesson.find().sort({ createdAt: -1 });
+    const lessons = await DailyLesson.find()
+      .populate("teacher", "name avatar role slug")
+      .sort({ createdAt: -1 });
     res.json({ success: true, data: lessons });
   } catch (err) {
     console.error("❌ getAllDailyLessons:", err);
@@ -49,10 +66,13 @@ export const getAllDailyLessons = async (req, res) => {
   }
 };
 
-// ── GET /api/daily-lesson/:id ─────────────────────────────────────────────────
+// ── GET /api/daily-lesson/:id ───────────────────────────────────
 export const getDailyLessonById = async (req, res) => {
   try {
-    const lesson = await DailyLesson.findById(req.params.id);
+    const lesson = await DailyLesson.findById(req.params.id).populate(
+      "teacher",
+      "name avatar role slug",
+    );
     if (!lesson)
       return res
         .status(404)
@@ -64,7 +84,7 @@ export const getDailyLessonById = async (req, res) => {
   }
 };
 
-// ── PATCH /api/daily-lesson/:id ───────────────────────────────────────────────
+// ── PATCH /api/daily-lesson/:id ─────────────────────────────────
 export const updateDailyLesson = async (req, res) => {
   try {
     const body = req.body ?? {};
@@ -74,12 +94,13 @@ export const updateDailyLesson = async (req, res) => {
     if (body.class) updateFields.class = body.class;
     if (body.chapterNumber) updateFields.chapterNumber = body.chapterNumber;
     if (body.topics) updateFields.topics = body.topics;
-    if (body.teacher) updateFields.teacher = body.teacher;
+    if (body.teacher) updateFields.teacher = body.teacher; // ← ObjectId
     if (body.referenceType)
       updateFields.referenceType =
         body.referenceType === "page" ? "page" : "chapter";
     if (body.teacherSlug !== undefined)
       updateFields.teacherSlug = body.teacherSlug || null;
+    if (body.date) updateFields.date = new Date(body.date);
 
     if (Object.keys(updateFields).length === 0)
       return res
@@ -90,7 +111,7 @@ export const updateDailyLesson = async (req, res) => {
       req.params.id,
       { $set: updateFields },
       { new: true, runValidators: true },
-    );
+    ).populate("teacher", "name avatar role slug");
 
     if (!lesson)
       return res
@@ -104,7 +125,7 @@ export const updateDailyLesson = async (req, res) => {
   }
 };
 
-// ── DELETE /api/daily-lesson/:id ──────────────────────────────────────────────
+// ── DELETE /api/daily-lesson/:id ────────────────────────────────
 export const deleteDailyLesson = async (req, res) => {
   try {
     const lesson = await DailyLesson.findById(req.params.id);

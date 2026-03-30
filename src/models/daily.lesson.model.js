@@ -9,10 +9,11 @@ const dailyLessonSchema = new mongoose.Schema(
       required: [true, "বিষয় আবশ্যিক"],
       trim: true,
     },
+    // ─── এটাই মূল পরিবর্তন ───
     teacher: {
-      type: String,
-      required: [true, "শিক্ষকের নাম আবশ্যিক"],
-      trim: true,
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: [true, "শিক্ষক আবশ্যিক"],
     },
     teacherSlug: {
       type: String,
@@ -28,7 +29,6 @@ const dailyLessonSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    // "chapter" or "page" — tells the frontend how to label chapterNumber
     referenceType: {
       type: String,
       enum: ["chapter", "page"],
@@ -56,10 +56,8 @@ const dailyLessonSchema = new mongoose.Schema(
       default: Date.now,
     },
   },
-
   { timestamps: true },
 );
 
 const DailyLesson = mongoose.model("DailyLesson", dailyLessonSchema);
-
 export default DailyLesson;
