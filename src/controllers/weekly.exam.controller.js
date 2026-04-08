@@ -81,10 +81,43 @@ export const createWeeklyExam = async (req, res) => {
       topics,
     } = req.body;
 
+    // Teacher resolve
     const teacherSlug = await resolveTeacherSlug(rawSlug, teacher);
     if (!teacher?.trim() && teacherSlug) {
       const found = await Teacher.findOne({ slug: teacherSlug }).select("name");
       if (found) teacher = found.name;
+    }
+
+    // ── chapterNumber handling (multiple ranges + comma support) ──
+    let finalChapterNumber = null;
+
+    if (chapterNumber?.toString().trim()) {
+      let cleaned = chapterNumber.toString().trim();
+
+      // বাংলা → ইংরেজি নাম্বার কনভার্ট (frontend থেকে না আসলে এখানে করব)
+      cleaned = cleaned
+        .replace(/০/g, "0")
+        .replace(/১/g, "1")
+        .replace(/২/g, "2")
+        .replace(/৩/g, "3")
+        .replace(/৪/g, "4")
+        .replace(/৫/g, "5")
+        .replace(/৬/g, "6")
+        .replace(/৭/g, "7")
+        .replace(/৮/g, "8")
+        .replace(/৯/g, "9")
+        .replace(/।/g, ".")
+        .replace(/–|—/g, "-");
+
+      // Validation
+      if (!/^[0-9.\-–, ]+$/.test(cleaned)) {
+        return res.status(400).json({
+          message:
+            "অধ্যায়/পৃষ্ঠা নম্বর সঠিক ফরম্যাটে দিন (যেমন: ২৫-৩০, ৬০-৬৭)",
+        });
+      }
+
+      finalChapterNumber = cleaned;
     }
 
     let images = [];
@@ -108,7 +141,7 @@ export const createWeeklyExam = async (req, res) => {
       class: cls,
       mark: Number(mark),
       ExamNumber,
-      chapterNumber,
+      chapterNumber: finalChapterNumber,
       topics,
       images,
       slug,
@@ -138,6 +171,15 @@ export const updateWeeklyExam = async (req, res) => {
 
     const teacherSlug = await resolveTeacherSlug(rawSlug, teacher);
 
+    let finalChapterNumber = null;
+    if (chapterNumber?.toString().trim()) {
+      const asciiChapter = toAsciiDigits
+        ? toAsciiDigits(chapterNumber.toString().trim())
+        : chapterNumber.toString().trim();
+
+      finalChapterNumber = asciiChapter;
+    }
+
     const update = {
       ...(subject && { subject }),
       ...(teacher && { teacher }),
@@ -145,7 +187,9 @@ export const updateWeeklyExam = async (req, res) => {
       ...(cls && { class: cls }),
       ...(mark && { mark: Number(mark) }),
       ...(ExamNumber && { ExamNumber }),
-      ...(chapterNumber && { chapterNumber }),
+      ...(finalChapterNumber !== undefined && {
+        chapterNumber: finalChapterNumber,
+      }),
       ...(topics && { topics }),
     };
 
@@ -162,6 +206,7 @@ export const updateWeeklyExam = async (req, res) => {
 
     const exam = await WeeklyExam.findByIdAndUpdate(id, update, { new: true });
     if (!exam) return res.status(404).json({ message: "Exam not found" });
+
     return res.status(200).json(exam);
   } catch (err) {
     return res.status(500).json({ message: "Failed", error: err.message });

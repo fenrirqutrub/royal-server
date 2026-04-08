@@ -52,7 +52,7 @@ app.use("/api/exam-marks", examMarksRoutes);
 // ── health check ──────────────────────────────────────────────────────────────
 app.get("/", (req, res) =>
   res.json({
-    message: "royal server is running",
+    message: "royal server is running...",
     port,
     timestamp: new Date().toISOString(),
   }),
@@ -76,6 +76,7 @@ app.use((err, req, res, next) => {
 app.listen(port, () => {
   console.log(`✅ Server running on port ${port}`);
   console.log(`http://localhost:${port}`);
+  console.log(`oi kire oi kire`);
 });
 
 export default app;
