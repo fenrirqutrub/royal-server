@@ -6,7 +6,27 @@ import {
   deleteFromCloudinary,
 } from "../config/cloudinary.js";
 
-// ── helper: resolve teacherSlug from name if not provided ────────────────────
+// ── Helper: Bangla to ASCII digits ─────────────────────────────────────────
+const toAsciiDigits = (str) => {
+  if (!str) return null;
+  return str
+    .toString()
+    .replace(/০/g, "0")
+    .replace(/১/g, "1")
+    .replace(/২/g, "2")
+    .replace(/৩/g, "3")
+    .replace(/৪/g, "4")
+    .replace(/৫/g, "5")
+    .replace(/৬/g, "6")
+    .replace(/৭/g, "7")
+    .replace(/৮/g, "8")
+    .replace(/৯/g, "9")
+    .replace(/।/g, ".")
+    .replace(/–|—/g, "-")
+    .trim();
+};
+
+// ── Helper: resolve teacherSlug from name if not provided ────────────────────
 const resolveTeacherSlug = async (rawSlug, teacherName) => {
   if (rawSlug) return rawSlug;
   if (!teacherName) return null;
@@ -16,42 +36,19 @@ const resolveTeacherSlug = async (rawSlug, teacherName) => {
   return found?.slug ?? null;
 };
 
-// ── helper: build slug ────────────────────────────────────
+// ── Helper: build slug ────────────────────────────────────
 const buildSlug = (ExamNumber, cls, subject, teacherSlug) =>
-  `${ExamNumber}-${cls}-${subject}-${teacherSlug}`.replace(/\s+/g, "-");
-
-// ── auto-migration: runs on every GET, fixes any wrong/missing slugs ─────────
-const migrateMissingSlugs = async () => {
-  const docs = await WeeklyExam.find({});
-
-  for (const doc of docs) {
-    try {
-      const teacherSlug =
-        doc.teacherSlug ?? (await resolveTeacherSlug(null, doc.teacher));
-      const correctSlug = buildSlug(
-        doc.ExamNumber,
-        doc.class,
-        doc.subject,
-        teacherSlug ?? doc._id.toString().slice(-4),
-      );
-
-      if (doc.slug !== correctSlug || doc.teacherSlug !== teacherSlug) {
-        await WeeklyExam.findByIdAndUpdate(doc._id, {
-          slug: correctSlug,
-          teacherSlug,
-        });
-      }
-    } catch (_) {}
-  }
-};
+  `${ExamNumber}-${cls}-${subject}-${teacherSlug ?? "unknown"}`
+    .replace(/\s+/g, "-")
+    .toLowerCase();
 
 // ── GET /api/weekly-exams ─────────────────────────────────
 export const getAllWeeklyExams = async (req, res) => {
   try {
-    await migrateMissingSlugs();
     const exams = await WeeklyExam.find().sort({ createdAt: -1 });
     return res.status(200).json(exams);
   } catch (err) {
+    console.error("getAllWeeklyExams error:", err);
     return res.status(500).json({ message: "Failed", error: err.message });
   }
 };
@@ -70,6 +67,9 @@ export const getWeeklyExamBySlug = async (req, res) => {
 // ── POST /api/weekly-exams ────────────────────────────────
 export const createWeeklyExam = async (req, res) => {
   try {
+    console.log("📥 Received body:", req.body);
+    console.log("📥 Received files:", req.files?.length || 0);
+
     let {
       subject,
       teacher,
@@ -77,80 +77,117 @@ export const createWeeklyExam = async (req, res) => {
       class: cls,
       mark,
       ExamNumber,
+      numberType = "chapterNumber",
+      pageNumber,
       chapterNumber,
       topics,
+      question,
     } = req.body;
 
-    // Teacher resolve
-    const teacherSlug = await resolveTeacherSlug(rawSlug, teacher);
-    if (!teacher?.trim() && teacherSlug) {
-      const found = await Teacher.findOne({ slug: teacherSlug }).select("name");
-      if (found) teacher = found.name;
+    // ── Validate required fields ───────────────────────────────
+    if (!subject?.trim()) {
+      return res.status(400).json({ message: "বিষয় আবশ্যিক" });
+    }
+    if (!teacher?.trim()) {
+      return res.status(400).json({ message: "শিক্ষকের নাম আবশ্যিক" });
+    }
+    if (!cls?.trim()) {
+      return res.status(400).json({ message: "শ্রেণি আবশ্যিক" });
+    }
+    if (!mark) {
+      return res.status(400).json({ message: "পূর্ণমান আবশ্যিক" });
+    }
+    if (!ExamNumber?.trim()) {
+      return res.status(400).json({ message: "পরীক্ষা নম্বর আবশ্যিক" });
+    }
+    if (!topics?.trim()) {
+      return res.status(400).json({ message: "বিষয়বস্তু আবশ্যিক" });
     }
 
-    // ── chapterNumber handling (multiple ranges + comma support) ──
+    // ── Resolve teacher slug ───────────────────────────────────
+    const teacherSlug = await resolveTeacherSlug(rawSlug, teacher);
+
+    // ── Process number value based on type ─────────────────────
+    let finalPageNumber = null;
     let finalChapterNumber = null;
 
-    if (chapterNumber?.toString().trim()) {
-      let cleaned = chapterNumber.toString().trim();
+    // Get the number value from the correct field
+    const numberValue =
+      numberType === "pageNumber" ? pageNumber : chapterNumber;
 
-      // বাংলা → ইংরেজি নাম্বার কনভার্ট (frontend থেকে না আসলে এখানে করব)
-      cleaned = cleaned
-        .replace(/০/g, "0")
-        .replace(/১/g, "1")
-        .replace(/২/g, "2")
-        .replace(/৩/g, "3")
-        .replace(/৪/g, "4")
-        .replace(/৫/g, "5")
-        .replace(/৬/g, "6")
-        .replace(/৭/g, "7")
-        .replace(/৮/g, "8")
-        .replace(/৯/g, "9")
-        .replace(/।/g, ".")
-        .replace(/–|—/g, "-");
-
-      // Validation
-      if (!/^[0-9.\-–, ]+$/.test(cleaned)) {
-        return res.status(400).json({
-          message:
-            "অধ্যায়/পৃষ্ঠা নম্বর সঠিক ফরম্যাটে দিন (যেমন: ২৫-৩০, ৬০-৬৭)",
-        });
-      }
-
-      finalChapterNumber = cleaned;
+    if (!numberValue?.toString().trim()) {
+      return res.status(400).json({
+        message:
+          numberType === "pageNumber"
+            ? "পৃষ্ঠা নম্বর আবশ্যিক"
+            : "অধ্যায় নম্বর আবশ্যিক",
+      });
     }
 
+    const processedNumber = toAsciiDigits(numberValue);
+
+    if (numberType === "pageNumber") {
+      finalPageNumber = processedNumber;
+    } else {
+      finalChapterNumber = processedNumber;
+    }
+
+    // ── Process images ─────────────────────────────────────────
     let images = [];
     if (req.files?.length) {
-      const uploadResults = await uploadMultipleToCloudinary(
-        req.files,
-        "weekly-exams",
-      );
-      images = uploadResults.map((r) => ({
-        imageUrl: r.secure_url,
-        publicId: r.public_id,
-      }));
+      try {
+        const uploadResults = await uploadMultipleToCloudinary(
+          req.files,
+          "weekly-exams",
+        );
+        images = uploadResults.map((r) => ({
+          imageUrl: r.secure_url,
+          publicId: r.public_id,
+        }));
+      } catch (uploadErr) {
+        console.error("Image upload error:", uploadErr);
+        // Continue without images if upload fails
+      }
     }
 
-    const slug = buildSlug(ExamNumber, cls, subject, teacherSlug ?? "unknown");
-
-    const exam = await WeeklyExam.create({
+    // ── Build slug ─────────────────────────────────────────────
+    const slug = buildSlug(
+      toAsciiDigits(ExamNumber),
+      cls,
       subject,
-      teacher,
       teacherSlug,
-      class: cls,
+    );
+
+    // ── Create exam document ───────────────────────────────────
+    const examData = {
+      subject: subject.trim(),
+      teacher: teacher.trim(),
+      teacherSlug,
+      class: cls.trim(),
       mark: Number(mark),
-      ExamNumber,
+      ExamNumber: toAsciiDigits(ExamNumber),
+      numberType,
+      pageNumber: finalPageNumber,
       chapterNumber: finalChapterNumber,
-      topics,
+      topics: topics.trim(),
+      question: question?.trim() || null,
       images,
       slug,
-    });
+    };
+
+    console.log("📤 Creating exam with data:", examData);
+
+    const exam = await WeeklyExam.create(examData);
+
+    console.log("✅ Exam created:", exam._id);
 
     return res.status(201).json(exam);
   } catch (err) {
-    console.error("createWeeklyExam error:", err);
-    return res.status(500).json({ message: "Failed", error: err.message });
+    console.error("❌ createWeeklyExam error:", err);
+    return res.status(500).json({
+      message: "পরীক্ষা তৈরি করতে সমস্যা হয়েছে",
+      error: err.message,
+    });
   }
 };
 
@@ -165,35 +202,66 @@ export const updateWeeklyExam = async (req, res) => {
       class: cls,
       mark,
       ExamNumber,
+      numberType,
+      pageNumber,
       chapterNumber,
       topics,
+      question,
     } = req.body;
+
+    // Check if exam exists
+    const existingExam = await WeeklyExam.findById(id);
+    if (!existingExam) {
+      return res.status(404).json({ message: "Exam not found" });
+    }
 
     const teacherSlug = await resolveTeacherSlug(rawSlug, teacher);
 
-    let finalChapterNumber = null;
-    if (chapterNumber?.toString().trim()) {
-      const asciiChapter = toAsciiDigits
-        ? toAsciiDigits(chapterNumber.toString().trim())
-        : chapterNumber.toString().trim();
+    // ── Build update object ────────────────────────────────────
+    const update = {};
 
-      finalChapterNumber = asciiChapter;
+    if (subject?.trim()) update.subject = subject.trim();
+    if (teacher?.trim()) update.teacher = teacher.trim();
+    if (teacherSlug) update.teacherSlug = teacherSlug;
+    if (cls?.trim()) update.class = cls.trim();
+    if (mark) update.mark = Number(mark);
+    if (ExamNumber?.trim()) update.ExamNumber = toAsciiDigits(ExamNumber);
+    if (topics?.trim()) update.topics = topics.trim();
+    if (question !== undefined) update.question = question?.trim() || null;
+
+    // Handle number type and values
+    if (numberType) {
+      update.numberType = numberType;
+
+      const numberValue =
+        numberType === "pageNumber" ? pageNumber : chapterNumber;
+
+      if (numberValue?.toString().trim()) {
+        const processedNumber = toAsciiDigits(numberValue);
+
+        if (numberType === "pageNumber") {
+          update.pageNumber = processedNumber;
+          update.chapterNumber = null;
+        } else {
+          update.chapterNumber = processedNumber;
+          update.pageNumber = null;
+        }
+      }
     }
 
-    const update = {
-      ...(subject && { subject }),
-      ...(teacher && { teacher }),
-      ...(teacherSlug !== undefined && { teacherSlug }),
-      ...(cls && { class: cls }),
-      ...(mark && { mark: Number(mark) }),
-      ...(ExamNumber && { ExamNumber }),
-      ...(finalChapterNumber !== undefined && {
-        chapterNumber: finalChapterNumber,
-      }),
-      ...(topics && { topics }),
-    };
-
+    // ── Handle images ──────────────────────────────────────────
     if (req.files?.length) {
+      // Delete old images
+      if (existingExam.images?.length) {
+        await Promise.all(
+          existingExam.images.map((img) =>
+            img.publicId
+              ? deleteFromCloudinary(img.publicId)
+              : Promise.resolve(),
+          ),
+        );
+      }
+
       const uploadResults = await uploadMultipleToCloudinary(
         req.files,
         "weekly-exams",
@@ -205,10 +273,10 @@ export const updateWeeklyExam = async (req, res) => {
     }
 
     const exam = await WeeklyExam.findByIdAndUpdate(id, update, { new: true });
-    if (!exam) return res.status(404).json({ message: "Exam not found" });
 
     return res.status(200).json(exam);
   } catch (err) {
+    console.error("updateWeeklyExam error:", err);
     return res.status(500).json({ message: "Failed", error: err.message });
   }
 };
@@ -216,8 +284,19 @@ export const updateWeeklyExam = async (req, res) => {
 // ── DELETE /api/weekly-exams/:id ──────────────────────────
 export const deleteWeeklyExam = async (req, res) => {
   try {
-    const exam = await WeeklyExam.findByIdAndDelete(req.params.id);
+    const exam = await WeeklyExam.findById(req.params.id);
     if (!exam) return res.status(404).json({ message: "Exam not found" });
+
+    // Delete images from Cloudinary
+    if (exam.images?.length) {
+      await Promise.all(
+        exam.images.map((img) =>
+          img.publicId ? deleteFromCloudinary(img.publicId) : Promise.resolve(),
+        ),
+      );
+    }
+
+    await WeeklyExam.findByIdAndDelete(req.params.id);
     return res.status(200).json({ message: "Deleted successfully" });
   } catch (err) {
     return res.status(500).json({ message: "Failed", error: err.message });
