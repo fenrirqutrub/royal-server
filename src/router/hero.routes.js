@@ -8,17 +8,11 @@ import {
   deleteHero,
   updateHero,
 } from "../controllers/hero.controller.js";
-import {
-  uploadHeroImage,
-  handleHeroUploadError,
-  validateLandscapeImage,
-} from "../middleware/upload.middleware.js";
 
 const router = express.Router();
 
-// IMPORTANT: validateLandscapeImage MUST be AFTER handleUploadError
-router.post("/", uploadHeroImage, handleHeroUploadError, createHero);
-router.put("/:id", uploadHeroImage, handleHeroUploadError, updateHero);
+router.post("/", createHero);
+router.put("/:id", updateHero);
 
 router.get("/", getAllHeroes);
 router.get("/unique/:uniqueID", getHeroByUniqueId);

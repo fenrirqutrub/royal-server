@@ -6,26 +6,11 @@ import {
   updateWeeklyExam,
   deleteWeeklyExam,
 } from "../controllers/weekly.exam.controller.js";
-import {
-  uploadMultiple,
-  handleUploadError,
-} from "../middleware/upload.middleware.js";
 
 const router = express.Router();
 
-router
-  .route("/")
-  .get(getAllWeeklyExams)
-  .post(uploadMultiple, handleUploadError, (req, res, next) => {
-    createWeeklyExam(req, res, next).catch(next);
-  });
-
+router.route("/").get(getAllWeeklyExams).post(createWeeklyExam);
 router.get("/:slug", getWeeklyExamBySlug);
-router
-  .route("/:id")
-  .put(uploadMultiple, handleUploadError, (req, res, next) => {
-    updateWeeklyExam(req, res, next).catch(next);
-  })
-  .delete(deleteWeeklyExam);
+router.route("/:id").put(updateWeeklyExam).delete(deleteWeeklyExam);
 
 export default router;

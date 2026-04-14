@@ -68,7 +68,6 @@ export const getWeeklyExamBySlug = async (req, res) => {
 export const createWeeklyExam = async (req, res) => {
   try {
     console.log("📥 Received body:", req.body);
-    console.log("📥 Received files:", req.files?.length || 0);
 
     let {
       subject,
@@ -82,6 +81,7 @@ export const createWeeklyExam = async (req, res) => {
       chapterNumber,
       topics,
       question,
+      images: imageUrls, // ✅ Now URLs from frontend
     } = req.body;
 
     // ── Validate required fields ───────────────────────────────
@@ -104,14 +104,11 @@ export const createWeeklyExam = async (req, res) => {
       return res.status(400).json({ message: "বিষয়বস্তু আবশ্যিক" });
     }
 
-    // ── Resolve teacher slug ───────────────────────────────────
     const teacherSlug = await resolveTeacherSlug(rawSlug, teacher);
 
-    // ── Process number value based on type ─────────────────────
     let finalPageNumber = null;
     let finalChapterNumber = null;
 
-    // Get the number value from the correct field
     const numberValue =
       numberType === "pageNumber" ? pageNumber : chapterNumber;
 
@@ -132,25 +129,9 @@ export const createWeeklyExam = async (req, res) => {
       finalChapterNumber = processedNumber;
     }
 
-    // ── Process images ─────────────────────────────────────────
-    let images = [];
-    if (req.files?.length) {
-      try {
-        const uploadResults = await uploadMultipleToCloudinary(
-          req.files,
-          "weekly-exams",
-        );
-        images = uploadResults.map((r) => ({
-          imageUrl: r.secure_url,
-          publicId: r.public_id,
-        }));
-      } catch (uploadErr) {
-        console.error("Image upload error:", uploadErr);
-        // Continue without images if upload fails
-      }
-    }
+    // ✅ Images already uploaded to Cloudinary - just use URLs
+    const images = Array.isArray(imageUrls) ? imageUrls : [];
 
-    // ── Build slug ─────────────────────────────────────────────
     const slug = buildSlug(
       toAsciiDigits(ExamNumber),
       cls,
@@ -158,7 +139,6 @@ export const createWeeklyExam = async (req, res) => {
       teacherSlug,
     );
 
-    // ── Create exam document ───────────────────────────────────
     const examData = {
       subject: subject.trim(),
       teacher: teacher.trim(),

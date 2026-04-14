@@ -14,6 +14,7 @@ import {
   uploadMultiple,
   handleUploadError,
 } from "../middleware/upload.middleware.js";
+import { getUploadSignature } from "../controllers/upload.signature.controller.js";
 
 const router = express.Router();
 
@@ -21,6 +22,7 @@ const router = express.Router();
 router.get("/", getPhotos);
 router.get("/admin", getPhotosAdmin);
 router.get("/:id", getPhoto);
+router.get("/api/upload-signature", getUploadSignature);
 
 // View increment route
 router.post("/:id/view", incrementView);

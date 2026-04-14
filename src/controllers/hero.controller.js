@@ -46,14 +46,11 @@ const generateUniqueID = async () => {
   }
 };
 
-// @desc    Create a new hero
-// @route   POST /api/heroes
-// @access  Public
+//  Create a new hero
 export const createHero = async (req, res) => {
   try {
-    const { title } = req.body;
+    const { title, imageUrl, imagePublicId } = req.body;
 
-    // Validate required fields
     if (!title) {
       return res.status(400).json({
         success: false,
@@ -61,26 +58,20 @@ export const createHero = async (req, res) => {
       });
     }
 
-    // Check if file was uploaded
-    if (!req.file) {
+    if (!imageUrl || !imagePublicId) {
       return res.status(400).json({
         success: false,
-        message: "Image file is required",
+        message: "Image URL and public ID are required",
       });
     }
 
-    // Generate unique ID automatically
     const uniqueID = await generateUniqueID();
 
-    // Upload image to Cloudinary from buffer
-    const cloudinaryResult = await uploadToCloudinary(req.file.buffer);
-
-    // Create hero in database
     const hero = await Hero.create({
       title,
       uniqueID,
-      imageUrl: cloudinaryResult.secure_url,
-      imagePublicId: cloudinaryResult.public_id,
+      imageUrl,
+      imagePublicId,
     });
 
     res.status(201).json({
@@ -89,7 +80,6 @@ export const createHero = async (req, res) => {
       data: hero,
     });
   } catch (error) {
-    // Handle validation errors
     if (error.name === "ValidationError") {
       const errors = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
@@ -99,7 +89,6 @@ export const createHero = async (req, res) => {
       });
     }
 
-    // Handle duplicate key error
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
@@ -116,8 +105,6 @@ export const createHero = async (req, res) => {
 };
 
 // @desc    Get all heroes
-// @route   GET /api/heroes
-// @access  Public
 export const getAllHeroes = async (req, res) => {
   try {
     const heroes = await Hero.find().sort({ createdAt: -1 });
@@ -245,12 +232,10 @@ export const deleteHero = async (req, res) => {
   }
 };
 
-// @desc    Update hero
 // @route   PUT /api/heroes/:id
-// @access  Public
 export const updateHero = async (req, res) => {
   try {
-    const { title } = req.body;
+    const { title, imageUrl, imagePublicId } = req.body;
 
     const hero = await Hero.findById(req.params.id);
 
@@ -261,23 +246,18 @@ export const updateHero = async (req, res) => {
       });
     }
 
-    // Update title if provided
     if (title) hero.title = title;
 
-    // Handle image update if new file uploaded
-    if (req.file) {
-      // Delete old image from Cloudinary
+    // If new image URL provided, delete old from Cloudinary
+    if (imageUrl && imagePublicId) {
       try {
         await cloudinary.uploader.destroy(hero.imagePublicId);
       } catch (cloudinaryError) {
         console.error("Cloudinary deletion error:", cloudinaryError);
       }
 
-      // Upload new image from buffer
-      const cloudinaryResult = await uploadToCloudinary(req.file.buffer);
-
-      hero.imageUrl = cloudinaryResult.secure_url;
-      hero.imagePublicId = cloudinaryResult.public_id;
+      hero.imageUrl = imageUrl;
+      hero.imagePublicId = imagePublicId;
     }
 
     await hero.save();
@@ -288,7 +268,6 @@ export const updateHero = async (req, res) => {
       data: hero,
     });
   } catch (error) {
-    // Handle validation errors
     if (error.name === "ValidationError") {
       const errors = Object.values(error.errors).map((err) => err.message);
       return res.status(400).json({
@@ -298,7 +277,6 @@ export const updateHero = async (req, res) => {
       });
     }
 
-    // Handle invalid ObjectId
     if (error.kind === "ObjectId") {
       return res.status(404).json({
         success: false,
