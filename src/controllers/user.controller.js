@@ -166,6 +166,7 @@ export const updateProfile = async (req, res) => {
       permanentDistrict,
       permanentDivision,
       collegeName,
+      qualification,
       educationComplete,
       degree,
       currentYear,
@@ -174,8 +175,10 @@ export const updateProfile = async (req, res) => {
       roll,
       schoolName,
       password,
+      avatar, // ✅ NEW — direct Cloudinary upload থেকে আসবে
     } = req.body;
 
+    // ── Conflict checks ──
     if (email) {
       const conflict = await User.findOne({
         email: email.toLowerCase(),
@@ -199,6 +202,7 @@ export const updateProfile = async (req, res) => {
       permanentSameAsPresent === true || permanentSameAsPresent === "true";
     const update = {};
 
+    // ── Basic fields ──
     if (name !== undefined) update.name = name.trim();
     if (fatherName !== undefined)
       update.fatherName = fatherName?.trim() || null;
@@ -214,6 +218,19 @@ export const updateProfile = async (req, res) => {
       update.emergencyContact = emergencyContact?.trim() || null;
     if (password) update.password = password;
 
+    // ── Avatar (direct Cloudinary upload) ── ✅ NEW
+    if (avatar && avatar.url) {
+      // পুরানো avatar delete করো
+      if (current.avatar?.publicId) {
+        await deleteFromCloudinary(current.avatar.publicId).catch(() => {});
+      }
+      update.avatar = {
+        url: avatar.url,
+        publicId: avatar.publicId || null,
+      };
+    }
+
+    // ── Present Address ──
     if (gramNam !== undefined) update.gramNam = gramNam?.trim() || null;
     if (para !== undefined) update.para = para?.trim() || null;
     if (thana !== undefined) update.thana = thana?.trim() || null;
@@ -221,6 +238,7 @@ export const updateProfile = async (req, res) => {
     if (division !== undefined) update.division = division?.trim() || null;
     if (landmark !== undefined) update.landmark = landmark?.trim() || null;
 
+    // ── Permanent Address ──
     if (permanentSameAsPresent !== undefined) {
       update.permanentSameAsPresent = isSame;
       update.permanentGramNam = isSame
@@ -251,14 +269,18 @@ export const updateProfile = async (req, res) => {
         update.permanentDivision = permanentDivision?.trim() || null;
     }
 
+    // ── Staff Education ── ✅ FIXED — degree editable now
     if (collegeName !== undefined)
-      // ← NEW
-      update.collegeName = collegeName?.trim() || null; // ← NEW
+      update.collegeName = collegeName?.trim() || null;
+    if (qualification !== undefined)
+      update.qualification = qualification?.trim() || null;
     if (educationComplete !== undefined)
-      update.educationComplete = educationComplete;
-    if (degree !== undefined) update.degree = degree ?? null;
-    if (currentYear !== undefined) update.currentYear = currentYear ?? null;
+      update.educationComplete =
+        educationComplete === true || educationComplete === "true";
+    if (degree !== undefined) update.degree = degree || null;
+    if (currentYear !== undefined) update.currentYear = currentYear || null;
 
+    // ── Student Education ──
     const CLASSES_WITH_SUBJECT = [
       "নবম শ্রেণি",
       "দশম শ্রেণি",

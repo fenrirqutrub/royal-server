@@ -44,6 +44,8 @@ const getFingerprint = (req) => {
   return `${ua}|${lang}`;
 };
 
+// auth.controller.js — makePayload function update
+
 export const makePayload = (u) => ({
   id: u._id?.toString() ?? u._id,
   name: u.name,
@@ -59,6 +61,11 @@ export const makePayload = (u) => ({
   avatar: u.avatar ?? { url: null, publicId: null },
   dateOfBirth: u.dateOfBirth ?? null,
   religion: u.religion ?? null,
+  collegeName: u.collegeName ?? null,
+  qualification: u.qualification ?? null,
+  educationComplete: u.educationComplete ?? null,
+  degree: u.degree ?? null,
+  currentYear: u.currentYear ?? null,
 });
 
 // ─── Slug builder ─────────────────────────────────────────────────────────────
@@ -342,6 +349,7 @@ export const signup = async (req, res) => {
 
     Object.assign(staffRecord, sharedFields, {
       email: email?.toLowerCase().trim() || null,
+      collegeName: collegeName?.trim() ?? null,
       qualification: qualification?.trim() ?? null,
       educationComplete: eduComplete,
       degree: eduComplete ? (degree ?? null) : null,
