@@ -1,7 +1,4 @@
-// src/controllers/auth.controller.js
-
 import jwt from "jsonwebtoken";
-import crypto from "crypto";
 import User from "../models/user.model.js";
 import { uploadSingleToCloudinary } from "../config/cloudinary.js";
 import {
@@ -13,39 +10,28 @@ import {
 const JWT_SECRET = process.env.JWT_SECRET || "changeme-secret";
 const TOKEN_EXPIRY = "24h";
 
-// ── Fingerprint hash করো — device info থেকে ──────────────────────────────────
-const hashFingerprint = (raw) =>
-  crypto
-    .createHash("sha256")
-    .update(raw ?? "")
-    .digest("hex")
-    .slice(0, 16);
-
-// ── Token issue — fingerprint bind করা ───────────────────────────────────────
-const issueToken = (user, isHardcoded = false, fingerprint = "") => {
+// ── Token issue ──────────────────────────────────────────────────────────────
+const issueToken = (user, isHardcoded = false) => {
   return jwt.sign(
     {
       id: user._id?.toString() ?? user._id,
       role: user.role,
       slug: user.slug ?? null,
       isHardcoded,
-      fp: hashFingerprint(fingerprint),
     },
     JWT_SECRET,
     { expiresIn: TOKEN_EXPIRY },
   );
 };
 
-// ── Request থেকে fingerprint নাও ─────────────────────────────────────────────
-const getFingerprint = (req) => {
-  const ua = req.headers["user-agent"] ?? "";
-  const lang = req.headers["accept-language"] ?? "";
-  // IP নেব না — mobile-এ IP বদলায়
-  return `${ua}|${lang}`;
+// ── Authorization header থেকে token বের করো ──────────────────────────────────
+const extractToken = (req) => {
+  const authHeader = req.headers["authorization"];
+  if (authHeader?.startsWith("Bearer ")) return authHeader.slice(7);
+  return null;
 };
 
-// auth.controller.js — makePayload function update
-
+// ── makePayload ──────────────────────────────────────────────────────────────
 export const makePayload = (u) => ({
   id: u._id?.toString() ?? u._id,
   name: u.name,
@@ -130,28 +116,6 @@ const buildAddressFields = (body) => {
   };
 };
 
-// ── Token verify helper — fingerprint check সহ ───────────────────────────────
-const verifyToken = (token, req) => {
-  const decoded = jwt.verify(token, JWT_SECRET);
-
-  // fingerprint check — অন্য device থেকে চুরি করা token কাজ করবে না
-  const currentFp = hashFingerprint(getFingerprint(req));
-  if (decoded.fp && decoded.fp !== currentFp) {
-    const err = new Error("Fingerprint mismatch");
-    err.name = "FingerprintError";
-    throw err;
-  }
-
-  return decoded;
-};
-
-// ── Authorization header থেকে token বের করো ──────────────────────────────────
-const extractToken = (req) => {
-  const authHeader = req.headers["authorization"];
-  if (authHeader?.startsWith("Bearer ")) return authHeader.slice(7);
-  return null;
-};
-
 // ─── POST /api/auth/login ─────────────────────────────────────────────────────
 export const login = async (req, res) => {
   try {
@@ -160,16 +124,18 @@ export const login = async (req, res) => {
     if (!phone && !email)
       return res.status(400).json({ message: "ফোন বা ইমেইল দিন" });
 
-    const fp = getFingerprint(req);
-
+    // Hardcoded admin check
     if (phone?.trim() === HARDCODED_ADMIN.phone) {
       if (password !== HARDCODED_ADMIN.password)
         return res.status(401).json({ message: "তথ্য সঠিক নয়" });
 
       const token = issueToken(
-        { _id: HARDCODED_ADMIN._id, role: "owner", slug: HARDCODED_ADMIN.slug },
+        {
+          _id: HARDCODED_ADMIN._id,
+          role: "owner",
+          slug: HARDCODED_ADMIN.slug,
+        },
         true,
-        fp,
       );
 
       return res.status(200).json({
@@ -179,6 +145,7 @@ export const login = async (req, res) => {
       });
     }
 
+    // Normal user
     const query = phone
       ? { phone: phone.trim() }
       : { email: email.toLowerCase() };
@@ -186,7 +153,7 @@ export const login = async (req, res) => {
     if (!user || !(await user.verifyPassword(password)))
       return res.status(401).json({ message: "ফোন নম্বর বা পাসওয়ার্ড ভুল" });
 
-    const token = issueToken(user, false, fp);
+    const token = issueToken(user, false);
     return res.status(200).json({
       success: true,
       token,
@@ -245,10 +212,10 @@ export const signup = async (req, res) => {
       currentYear,
       qualification,
       email,
+      collegeName, // ✅ FIXED — was missing
     } = req.body;
 
     const isStudent = !role || role === "student";
-    const fp = getFingerprint(req);
 
     if (!password) return res.status(400).json({ message: "পাসওয়ার্ড দিন" });
     if (!req.body.gramNam?.trim())
@@ -292,6 +259,7 @@ export const signup = async (req, res) => {
       "দ্বাদশ শ্রেণি",
     ];
 
+    // ── Student signup ──
     if (isStudent) {
       if (!name?.trim()) return res.status(400).json({ message: "নাম লিখুন" });
       const trimmedPhone = phone?.trim();
@@ -319,12 +287,13 @@ export const signup = async (req, res) => {
         ...sharedFields,
       });
 
-      const token = issueToken(user, false, fp);
+      const token = issueToken(user, false);
       return res
         .status(201)
         .json({ success: true, token, user: makePayload(user) });
     }
 
+    // ── Staff signup (onboarding) ──
     if (!STAFF_ROLES.includes(role))
       return res.status(400).json({ message: "অবৈধ ভূমিকা" });
 
@@ -349,7 +318,7 @@ export const signup = async (req, res) => {
 
     Object.assign(staffRecord, sharedFields, {
       email: email?.toLowerCase().trim() || null,
-      collegeName: collegeName?.trim() ?? null,
+      collegeName: collegeName?.trim() ?? null, // ✅ FIXED
       qualification: qualification?.trim() ?? null,
       educationComplete: eduComplete,
       degree: eduComplete ? (degree ?? null) : null,
@@ -358,7 +327,7 @@ export const signup = async (req, res) => {
 
     await staffRecord.save();
 
-    const token = issueToken(staffRecord, false, fp);
+    const token = issueToken(staffRecord, false);
     return res
       .status(200)
       .json({ success: true, token, user: makePayload(staffRecord) });
@@ -377,16 +346,8 @@ export const signup = async (req, res) => {
 // ─── POST /api/auth/onboarding ────────────────────────────────────────────────
 export const completeOnboarding = async (req, res) => {
   try {
-    const token = extractToken(req);
-    if (!token) return res.status(401).json({ message: "লগইন করুন" });
-
-    let decoded;
-    try {
-      decoded = verifyToken(token, req);
-    } catch {
-      return res.status(401).json({ message: "সেশন মেয়াদোত্তীর্ণ" });
-    }
-
+    const decoded = req.user; // ✅ authenticate middleware থেকে আসবে
+    if (!decoded) return res.status(401).json({ message: "লগইন করুন" });
     if (decoded.isHardcoded)
       return res.status(403).json({ message: "প্রযোজ্য নয়" });
 
@@ -401,6 +362,7 @@ export const completeOnboarding = async (req, res) => {
       educationComplete,
       degree,
       currentYear,
+      collegeName,
     } = req.body;
 
     if (
@@ -451,6 +413,7 @@ export const completeOnboarding = async (req, res) => {
       dateOfBirth: parsedDob,
       religion: religion || null,
       emergencyContact: emergencyContact?.trim() ?? null,
+      collegeName: collegeName?.trim() ?? null,
       qualification: qualification?.trim() ?? null,
       educationComplete: eduComplete ?? null,
       degree: eduComplete ? (degree ?? null) : null,
@@ -475,22 +438,8 @@ export const completeOnboarding = async (req, res) => {
 // ─── GET /api/auth/me ─────────────────────────────────────────────────────────
 export const me = async (req, res) => {
   try {
-    const token = extractToken(req);
-    if (!token) return res.status(401).json({ message: "লগইন করুন" });
-
-    let decoded;
-    try {
-      decoded = verifyToken(token, req);
-    } catch (jwtErr) {
-      if (
-        jwtErr.name === "TokenExpiredError" ||
-        jwtErr.name === "JsonWebTokenError" ||
-        jwtErr.name === "FingerprintError"
-      ) {
-        return res.status(401).json({ message: "সেশন মেয়াদোত্তীর্ণ" });
-      }
-      return res.status(503).json({ message: "সাময়িক সমস্যা" });
-    }
+    const decoded = req.user; // ✅ authenticate middleware থেকে
+    if (!decoded) return res.status(401).json({ message: "লগইন করুন" });
 
     if (decoded.id === HARDCODED_ADMIN._id)
       return res.status(200).json({ user: makePayload(HARDCODED_ADMIN) });
@@ -527,16 +476,11 @@ export const forgotPassword = async (req, res) => {
       return res.status(404).json({ message: "তথ্য মিলছে না" });
 
     const storedDate = user.dateOfBirth.toISOString().split("T")[0];
-    const givenDate = String(dateOfBirth).trim().split("T")[0];
+    const givenDate = new Date(String(dateOfBirth).trim())
+      .toISOString()
+      .split("T")[0];
 
-    const givenMs = new Date(givenDate).getTime();
-    const candidates = [
-      givenDate,
-      new Date(givenMs - 86_400_000).toISOString().split("T")[0],
-      new Date(givenMs + 86_400_000).toISOString().split("T")[0],
-    ];
-
-    if (!candidates.includes(storedDate))
+    if (storedDate !== givenDate)
       return res
         .status(401)
         .json({ message: "ফোন নম্বর বা জন্ম তারিখ সঠিক নয়" });

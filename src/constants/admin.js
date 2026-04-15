@@ -1,9 +1,8 @@
-// src/constants/admin.js
 export const HARDCODED_ADMIN = {
   _id: "hardcoded-admin",
   name: "Owner",
   email: "mib@kobita.com",
-  phone: "01319000077", // ← তোমার আসল নম্বর দাও
+  phone: "01319000077",
   role: "owner",
   password: "kobita",
   isHardcoded: true,

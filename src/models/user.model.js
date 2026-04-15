@@ -1,5 +1,4 @@
-// src/models/user.model.js
-import mongoose from "mongoose";
+// src/models/user.model.jsimport mongoose from "mongoose";
 import bcrypt from "bcrypt";
 
 const ROLES = ["student", "teacher", "principal", "admin", "owner"];

@@ -1,4 +1,3 @@
-// src/controllers/user.controller.js
 import User from "../models/user.model.js";
 import { buildSlug, makePayload } from "./auth.controller.js";
 import {
@@ -29,7 +28,10 @@ export const getUsers = async (req, res) => {
 // ─── POST /api/users ──────────────────────────────────────────────────────────
 export const createUser = async (req, res) => {
   try {
-    const { name, phone, role = "teacher", callerRole } = req.body;
+    const { name, phone, role = "teacher" } = req.body;
+    const callerRole = req.user?.role; // ✅ from middleware
+
+    if (!callerRole) return res.status(401).json({ message: "লগইন করুন" });
 
     if (!name?.trim() || !phone?.trim())
       return res.status(400).json({ message: "নাম ও ফোন নম্বর আবশ্যক" });
@@ -40,7 +42,7 @@ export const createUser = async (req, res) => {
         .status(400)
         .json({ message: `Role must be one of: ${validRoles.join(", ")}` });
 
-    if (!canAssign(callerRole ?? "teacher", role))
+    if (!canAssign(callerRole, role))
       return res
         .status(403)
         .json({ message: `A ${callerRole} cannot create a ${role}` });
@@ -74,9 +76,17 @@ export const updateUser = async (req, res) => {
     if (id === HARDCODED_ADMIN._id)
       return res.status(403).json({ message: "Cannot modify hardcoded admin" });
 
-    const { name, phone, role, callerRole } = req.body;
+    const { name, phone, role } = req.body;
+    const callerRole = req.user?.role; // ✅ from middleware
 
-    if (role && !canAssign(callerRole ?? "teacher", role))
+    if (!callerRole) return res.status(401).json({ message: "লগইন করুন" });
+
+    // ✅ Only privileged roles can update users via admin panel
+    const allowedCallers = ["owner", "admin", "principal"];
+    if (!allowedCallers.includes(callerRole))
+      return res.status(403).json({ message: "অনুমতি নেই" });
+
+    if (role && !canAssign(callerRole, role))
       return res.status(403).json({ message: `Cannot assign role: ${role}` });
 
     const update = {};
@@ -88,9 +98,9 @@ export const updateUser = async (req, res) => {
       update.slug = await buildSlug(role, id);
     }
 
-    const user = await User.findByIdAndUpdate(id, update, { new: true }).select(
-      "-password",
-    );
+    const user = await User.findByIdAndUpdate(id, update, {
+      new: true,
+    }).select("-password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
     return res.status(200).json(user);
@@ -108,8 +118,17 @@ export const deleteUser = async (req, res) => {
     if (id === HARDCODED_ADMIN._id)
       return res.status(403).json({ message: "Cannot delete hardcoded admin" });
 
+    // ✅ Only privileged roles can delete
+    const allowedCallers = ["owner", "admin"];
+    if (!allowedCallers.includes(req.user?.role))
+      return res.status(403).json({ message: "অনুমতি নেই" });
+
     const user = await User.findByIdAndDelete(id);
     if (!user) return res.status(404).json({ message: "User not found" });
+
+    // ✅ Delete avatar from Cloudinary too
+    if (user.avatar?.publicId)
+      await deleteFromCloudinary(user.avatar.publicId).catch(() => {});
 
     return res.status(200).json({ message: "Deleted successfully" });
   } catch (err) {
@@ -139,6 +158,13 @@ export const updateProfile = async (req, res) => {
     const { slug } = req.params;
     if (slug === HARDCODED_ADMIN.slug)
       return res.status(403).json({ message: "Cannot modify hardcoded admin" });
+
+    // ✅ Ownership check
+    const isPrivileged = ["owner", "admin"].includes(req.user?.role);
+    if (!isPrivileged && req.user?.slug !== slug)
+      return res
+        .status(403)
+        .json({ message: "নিজের প্রোফাইল ছাড়া পরিবর্তন করা যাবে না" });
 
     const current = await User.findOne({ slug });
     if (!current) return res.status(404).json({ message: "Profile not found" });
@@ -175,7 +201,7 @@ export const updateProfile = async (req, res) => {
       roll,
       schoolName,
       password,
-      avatar, // ✅ NEW — direct Cloudinary upload থেকে আসবে
+      avatar, // ✅ direct Cloudinary upload থেকে আসবে
     } = req.body;
 
     // ── Conflict checks ──
@@ -216,14 +242,15 @@ export const updateProfile = async (req, res) => {
     if (religion !== undefined) update.religion = religion || null;
     if (emergencyContact !== undefined)
       update.emergencyContact = emergencyContact?.trim() || null;
-    if (password) update.password = password;
 
-    // ── Avatar (direct Cloudinary upload) ── ✅ NEW
+    // ✅ Password — min 6 chars
+    if (password && password.trim().length >= 6)
+      update.password = password.trim();
+
+    // ── Avatar (direct Cloudinary upload) ──
     if (avatar && avatar.url) {
-      // পুরানো avatar delete করো
-      if (current.avatar?.publicId) {
+      if (current.avatar?.publicId)
         await deleteFromCloudinary(current.avatar.publicId).catch(() => {});
-      }
       update.avatar = {
         url: avatar.url,
         publicId: avatar.publicId || null,
@@ -269,7 +296,7 @@ export const updateProfile = async (req, res) => {
         update.permanentDivision = permanentDivision?.trim() || null;
     }
 
-    // ── Staff Education ── ✅ FIXED — degree editable now
+    // ── Staff Education ──
     if (collegeName !== undefined)
       update.collegeName = collegeName?.trim() || null;
     if (qualification !== undefined)
@@ -318,12 +345,22 @@ export const updateAvatar = async (req, res) => {
     if (!req.file)
       return res.status(400).json({ message: "No image file provided" });
 
+    // ✅ Ownership check
+    const isPrivileged = ["owner", "admin"].includes(req.user?.role);
+    if (
+      slug !== HARDCODED_ADMIN.slug &&
+      !isPrivileged &&
+      req.user?.slug !== slug
+    )
+      return res
+        .status(403)
+        .json({ message: "নিজের ছবি ছাড়া পরিবর্তন করা যাবে না" });
+
     if (slug === HARDCODED_ADMIN.slug) {
-      if (HARDCODED_ADMIN.avatar?.publicId) {
+      if (HARDCODED_ADMIN.avatar?.publicId)
         await deleteFromCloudinary(HARDCODED_ADMIN.avatar.publicId).catch(
           () => {},
         );
-      }
       const result = await uploadSingleToCloudinary(req.file, "avatars");
       HARDCODED_ADMIN.avatar = {
         url: result.secure_url,

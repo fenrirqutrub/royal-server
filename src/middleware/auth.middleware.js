@@ -1,23 +1,7 @@
-// src/middleware/auth.middleware.js
-
 import jwt from "jsonwebtoken";
-import crypto from "crypto";
 import { HARDCODED_ADMIN } from "../constants/admin.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "changeme-secret";
-
-const hashFingerprint = (raw) =>
-  crypto
-    .createHash("sha256")
-    .update(raw ?? "")
-    .digest("hex")
-    .slice(0, 16);
-
-const getFingerprint = (req) => {
-  const ua = req.headers["user-agent"] ?? "";
-  const lang = req.headers["accept-language"] ?? "";
-  return `${ua}|${lang}`;
-};
 
 // ── Token verify করো, req.user সেট করো ──────────────────────────────────────
 export const authenticate = (req, res, next) => {
@@ -54,14 +38,14 @@ export const authenticate = (req, res, next) => {
   }
 };
 
-// Add this alongside authenticate:
+// ── Optional auth — no token? skip silently ──────────────────────────────────
 export const authenticateOptional = (req, res, next) => {
   try {
     const authHeader = req.headers["authorization"];
     const token = authHeader?.startsWith("Bearer ")
       ? authHeader.slice(7)
       : null;
-    if (!token) return next(); // no token → skip silently
+    if (!token) return next();
 
     const decoded = jwt.verify(token, JWT_SECRET);
     if (decoded.isHardcoded) {
@@ -81,11 +65,10 @@ export const authenticateOptional = (req, res, next) => {
     }
     next();
   } catch {
-    next(); // invalid/expired token → treat as anonymous
+    next();
   }
 };
 
-// ── Manager roles — সব data দেখতে পারবে ──────────────────────────────────────
+// ── Manager roles ────────────────────────────────────────────────────────────
 export const MANAGER_ROLES = ["principal", "admin", "owner"];
-
 export const isManager = (role) => MANAGER_ROLES.includes(role);

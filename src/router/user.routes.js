@@ -1,4 +1,3 @@
-// src/router/user.routes.js
 import express from "express";
 import {
   login,
@@ -20,6 +19,10 @@ import {
   updateAvatar,
 } from "../controllers/user.controller.js";
 import {
+  authenticate,
+  authenticateOptional,
+} from "../middleware/auth.middleware.js";
+import {
   uploadAvatar,
   uploadSingleImage,
   handleUploadError,
@@ -27,32 +30,36 @@ import {
 
 const router = express.Router();
 
-// ── Auth ──────────────────────────────────────────────────────────────────────
+// ── Auth (public) ──
 router.post("/auth/login", login);
 router.post("/auth/logout", logout);
-router.get("/auth/me", me);
 router.post("/auth/check-staff-phone", checkStaffPhone);
 router.post("/auth/signup", uploadAvatar, handleUploadError, signup);
+router.post("/auth/forgot-password", forgotPassword);
+router.post("/auth/reset-password", resetPassword);
+
+// ── Auth (protected) ──
+router.get("/auth/me", authenticate, me);
 router.post(
   "/auth/onboarding",
+  authenticate,
   uploadAvatar,
   handleUploadError,
   completeOnboarding,
 );
-router.post("/auth/forgot-password", forgotPassword);
-router.post("/auth/reset-password", resetPassword);
 
-// ── User CRUD (admin panel) ───────────────────────────────────────────────────
-router.get("/users", getUsers);
-router.post("/users", createUser);
-router.patch("/users/:id", updateUser);
-router.delete("/users/:id", deleteUser);
+// ── User CRUD (admin panel — protected) ──
+router.get("/users", authenticate, getUsers);
+router.post("/users", authenticate, createUser);
+router.patch("/users/:id", authenticate, updateUser);
+router.delete("/users/:id", authenticate, deleteUser);
 
-// ── Profile (slug-based) ──────────────────────────────────────────────────────
-router.get("/users/:slug/profile", getProfile);
-router.patch("/users/:slug/profile", updateProfile);
+// ── Profile (slug-based) ──
+router.get("/users/:slug/profile", authenticateOptional, getProfile);
+router.patch("/users/:slug/profile", authenticate, updateProfile);
 router.post(
   "/users/:slug/avatar",
+  authenticate,
   uploadSingleImage,
   handleUploadError,
   updateAvatar,
