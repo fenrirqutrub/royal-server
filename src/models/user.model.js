@@ -1,5 +1,6 @@
 // src/models/user.model.jsimport mongoose from "mongoose";
 import bcrypt from "bcrypt";
+import mongoose from "mongoose";
 
 const ROLES = ["student", "teacher", "principal", "admin", "owner"];
 const RELIGIONS = ["ইসলাম", "হিন্দু", "বৌদ্ধ", "খ্রিষ্টান"];
