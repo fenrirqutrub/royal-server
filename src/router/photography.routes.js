@@ -14,25 +14,26 @@ import {
   uploadMultiple,
   handleUploadError,
 } from "../middleware/upload.middleware.js";
-import { getUploadSignature } from "../controllers/upload.signature.controller.js";
+import { savePhotoUrls } from "../utils/save-urls.js";
 
 const router = express.Router();
+
+router.post("/save-urls", savePhotoUrls);
 
 // Public routes
 router.get("/", getPhotos);
 router.get("/admin", getPhotosAdmin);
-router.get("/:id", getPhoto);
-router.get("/api/upload-signature", getUploadSignature);
 
-// View increment route
-router.post("/:id/view", incrementView);
-
-// Upload route (with file handling)
+// Upload route (legacy - multer wala, optional rakhte paro)
 router.post("/", uploadMultiple, handleUploadError, uploadPhotos);
 
-// Update and delete routes
+// Batch delete (MUST be before /:id)
+router.post("/batch/delete", deleteBatchPhotos);
+
+// Single photo routes
+router.get("/:id", getPhoto);
+router.post("/:id/view", incrementView);
 router.patch("/:id", updatePhoto);
 router.delete("/:id", deletePhoto);
-router.post("/batch/delete", deleteBatchPhotos);
 
 export default router;

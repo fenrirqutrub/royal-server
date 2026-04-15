@@ -187,9 +187,9 @@ export const updateWeeklyExam = async (req, res) => {
       chapterNumber,
       topics,
       question,
+      images: newImages, // ✅ URLs from frontend
     } = req.body;
 
-    // Check if exam exists
     const existingExam = await WeeklyExam.findById(id);
     if (!existingExam) {
       return res.status(404).json({ message: "Exam not found" });
@@ -197,7 +197,6 @@ export const updateWeeklyExam = async (req, res) => {
 
     const teacherSlug = await resolveTeacherSlug(rawSlug, teacher);
 
-    // ── Build update object ────────────────────────────────────
     const update = {};
 
     if (subject?.trim()) update.subject = subject.trim();
@@ -209,7 +208,6 @@ export const updateWeeklyExam = async (req, res) => {
     if (topics?.trim()) update.topics = topics.trim();
     if (question !== undefined) update.question = question?.trim() || null;
 
-    // Handle number type and values
     if (numberType) {
       update.numberType = numberType;
 
@@ -229,9 +227,8 @@ export const updateWeeklyExam = async (req, res) => {
       }
     }
 
-    // ── Handle images ──────────────────────────────────────────
-    if (req.files?.length) {
-      // Delete old images
+    // ✅ Handle images (URLs from frontend)
+    if (Array.isArray(newImages) && newImages.length > 0) {
       if (existingExam.images?.length) {
         await Promise.all(
           existingExam.images.map((img) =>
@@ -241,18 +238,12 @@ export const updateWeeklyExam = async (req, res) => {
           ),
         );
       }
-
-      const uploadResults = await uploadMultipleToCloudinary(
-        req.files,
-        "weekly-exams",
-      );
-      update.images = uploadResults.map((r) => ({
-        imageUrl: r.secure_url,
-        publicId: r.public_id,
-      }));
+      update.images = newImages;
     }
 
-    const exam = await WeeklyExam.findByIdAndUpdate(id, update, { new: true });
+    const exam = await WeeklyExam.findByIdAndUpdate(id, update, {
+      new: true,
+    });
 
     return res.status(200).json(exam);
   } catch (err) {

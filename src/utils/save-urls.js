@@ -1,3 +1,6 @@
+// src/utils/save-urls.js
+import { Photography } from "../models/photography.model.js";
+
 export const savePhotoUrls = async (req, res) => {
   try {
     const { images } = req.body;
