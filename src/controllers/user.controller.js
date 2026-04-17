@@ -25,6 +25,21 @@ export const getUsers = async (req, res) => {
   }
 };
 
+// ─── GET /api/users/public ─────────────────────────────────────────────────
+export const getPublicStaff = async (req, res) => {
+  try {
+    const users = await User.find({
+      role: { $in: ["teacher", "principal", "admin"] },
+    })
+      .select("name role avatar slug collegeName degree")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json(users);
+  } catch (err) {
+    return res.status(500).json({ message: "Failed", error: err.message });
+  }
+};
+
 // ─── POST /api/users ──────────────────────────────────────────────────────────
 export const createUser = async (req, res) => {
   try {

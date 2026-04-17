@@ -11,6 +11,7 @@ import {
 } from "../controllers/auth.controller.js";
 import {
   getUsers,
+  getPublicStaff,
   createUser,
   updateUser,
   deleteUser,
@@ -18,10 +19,7 @@ import {
   updateProfile,
   updateAvatar,
 } from "../controllers/user.controller.js";
-import {
-  authenticate,
-  authenticateOptional,
-} from "../middleware/auth.middleware.js";
+import { authenticate } from "../middleware/auth.middleware.js";
 import {
   uploadAvatar,
   uploadSingleImage,
@@ -49,13 +47,14 @@ router.post(
 );
 
 // ── User CRUD (admin panel — protected) ──
+router.get("/users/public", getPublicStaff);
 router.get("/users", authenticate, getUsers);
 router.post("/users", authenticate, createUser);
 router.patch("/users/:id", authenticate, updateUser);
 router.delete("/users/:id", authenticate, deleteUser);
 
 // ── Profile (slug-based) ──
-router.get("/users/:slug/profile", authenticateOptional, getProfile);
+router.get("/users/:slug/profile", getProfile);
 router.patch("/users/:slug/profile", authenticate, updateProfile);
 router.post(
   "/users/:slug/avatar",
