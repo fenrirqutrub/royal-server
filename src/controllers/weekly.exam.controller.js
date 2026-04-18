@@ -1,10 +1,7 @@
 // src/controllers/weekly.exam.controller.js
 import WeeklyExam from "../models/weekly.exam.model.js";
 import Teacher from "../models/user.model.js";
-import {
-  uploadMultipleToCloudinary,
-  deleteFromCloudinary,
-} from "../config/cloudinary.js";
+import { deleteFromCloudinary } from "../config/cloudinary.js";
 
 // ── Helper: Bangla to ASCII digits ─────────────────────────────────────────
 const toAsciiDigits = (str) => {
@@ -67,8 +64,6 @@ export const getWeeklyExamBySlug = async (req, res) => {
 // ── POST /api/weekly-exams ────────────────────────────────
 export const createWeeklyExam = async (req, res) => {
   try {
-    console.log("📥 Received body:", req.body);
-
     let {
       subject,
       teacher,
@@ -81,7 +76,7 @@ export const createWeeklyExam = async (req, res) => {
       chapterNumber,
       topics,
       question,
-      images: imageUrls, // ✅ Now URLs from frontend
+      images: imageUrls,
     } = req.body;
 
     // ── Validate required fields ───────────────────────────────
@@ -129,8 +124,14 @@ export const createWeeklyExam = async (req, res) => {
       finalChapterNumber = processedNumber;
     }
 
-    // ✅ Images already uploaded to Cloudinary - just use URLs
-    const images = Array.isArray(imageUrls) ? imageUrls : [];
+    const images = Array.isArray(imageUrls)
+      ? imageUrls
+          .filter((img) => img && img.imageUrl)
+          .map((img) => ({
+            imageUrl: img.imageUrl,
+            publicId: img.publicId,
+          }))
+      : [];
 
     const slug = buildSlug(
       toAsciiDigits(ExamNumber),
@@ -155,19 +156,15 @@ export const createWeeklyExam = async (req, res) => {
       slug,
     };
 
-    console.log("📤 Creating exam with data:", examData);
-
     const exam = await WeeklyExam.create(examData);
-
-    console.log("✅ Exam created:", exam._id);
-
     return res.status(201).json(exam);
   } catch (err) {
-    console.error("❌ createWeeklyExam error:", err);
-    return res.status(500).json({
-      message: "পরীক্ষা তৈরি করতে সমস্যা হয়েছে",
-      error: err.message,
-    });
+    if (err.code === 11000) {
+      return res.status(409).json({
+        message: "এই পরীক্ষার তথ্য ইতোমধ্যে যোগ করা আছে",
+      });
+    }
+    return res.status(500).json({ message: "পরীক্ষা তৈরি করতে সমস্যা হয়েছে" });
   }
 };
 

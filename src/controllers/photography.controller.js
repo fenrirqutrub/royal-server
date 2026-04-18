@@ -1,8 +1,5 @@
 // src/controllers/photography.controller.js
-import {
-  uploadToCloudinary,
-  uploadMultipleToCloudinary,
-} from "../config/cloudinary.js";
+
 import { Photography } from "../models/photography.model.js";
 import mongoose from "mongoose";
 

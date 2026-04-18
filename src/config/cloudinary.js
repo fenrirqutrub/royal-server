@@ -1,6 +1,7 @@
-// src/config/cloudinary.js
+// src/config/cloudinary.js — simplified, no sharp needed for weekly-exam
+
 import { v2 as cloudinary } from "cloudinary";
-import sharp from "sharp"; // ✅ নতুন
+import sharp from "sharp"; // ✅ Keep for avatar/hero (server-side upload)
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -10,18 +11,16 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// ─── WebP converter ───────────────────────────────────────────────────────────
+// ── WebP converter (only for server-side uploads like avatar) ─────────────
 const toWebP = async (buffer) => {
-  return sharp(buffer)
-    .webp({ quality: 85 }) // quality 85 — ভালো balance
-    .toBuffer();
+  return sharp(buffer).webp({ quality: 85 }).toBuffer();
 };
 
-// ─── single upload (buffer) ───────────────────────────────────────────────────
+// ── Server-side upload (avatar, hero — NOT weekly-exam) ───────────────────
 export const uploadToCloudinary = async (fileBuffer, folder = "uploads") => {
   if (!fileBuffer || fileBuffer.length === 0) throw new Error("Empty buffer");
 
-  const webpBuffer = await toWebP(fileBuffer); // ✅ convert to webp
+  const webpBuffer = await toWebP(fileBuffer);
 
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
@@ -29,7 +28,7 @@ export const uploadToCloudinary = async (fileBuffer, folder = "uploads") => {
     }, 120000);
 
     const stream = cloudinary.uploader.upload_stream(
-      { folder, resource_type: "image", format: "webp" }, // ✅ format: webp
+      { folder, resource_type: "image", format: "webp" },
       (error, result) => {
         clearTimeout(timeout);
         if (error) reject(error);
@@ -41,19 +40,17 @@ export const uploadToCloudinary = async (fileBuffer, folder = "uploads") => {
       clearTimeout(timeout);
       reject(err);
     });
-    stream.end(webpBuffer); // ✅ webp buffer পাঠাও
+    stream.end(webpBuffer);
   });
 };
 
-// ─── alias used by avatar upload ─────────────────────────────────────────────
 export const uploadSingleToCloudinary = (file, folder = "uploads") =>
   uploadToCloudinary(file.buffer, folder);
 
-// ─── delete by publicId ───────────────────────────────────────────────────────
 export const deleteFromCloudinary = (publicId) =>
   cloudinary.uploader.destroy(publicId);
 
-// ─── multiple upload with retry ───────────────────────────────────────────────
+// ── Multiple upload — only for server-side needs ──────────────────────────
 const uploadWithRetry = async (fileBuffer, folder, retries = 3) => {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
