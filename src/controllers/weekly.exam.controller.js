@@ -184,7 +184,7 @@ export const updateWeeklyExam = async (req, res) => {
       chapterNumber,
       topics,
       question,
-      images: newImages, // ✅ URLs from frontend
+      images: newImages,
     } = req.body;
 
     const existingExam = await WeeklyExam.findById(id);

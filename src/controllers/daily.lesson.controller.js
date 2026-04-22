@@ -8,7 +8,7 @@ export const createDailyLesson = async (req, res) => {
   try {
     const {
       subject,
-      teacher, // ← এখন এটা User এর _id হবে
+      teacher,
       teacherSlug,
       class: cls,
       mark,
@@ -29,7 +29,7 @@ export const createDailyLesson = async (req, res) => {
 
     const lesson = await DailyLesson.create({
       subject,
-      teacher, // ← ObjectId
+      teacher,
       teacherSlug: teacherSlug || null,
       class: cls,
       mark: mark ? Number(mark) : 0,

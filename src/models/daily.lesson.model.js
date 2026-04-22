@@ -42,7 +42,7 @@ const dailyLessonSchema = new mongoose.Schema(
     topics: {
       type: String,
       required: [true, "বিষয়বস্তু আবশ্যিক"],
-      minlength: [20, "কমপক্ষে ২০ অক্ষর লিখুন"],
+      minlength: [5, "কমপক্ষে ৫ অক্ষর লিখুন"],
       trim: true,
     },
     slug: {
