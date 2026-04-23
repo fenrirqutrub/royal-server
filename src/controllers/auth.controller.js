@@ -8,7 +8,7 @@ import {
 } from "../constants/admin.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "changeme-secret";
-const TOKEN_EXPIRY = "24h";
+const TOKEN_EXPIRY = "30d";
 
 // ── Token issue ──────────────────────────────────────────────────────────────
 const issueToken = (user, isHardcoded = false) => {
