@@ -36,7 +36,7 @@ const dailyLessonSchema = new mongoose.Schema(
     },
     chapterNumber: {
       type: String,
-      required: [true, "অধ্যায়/পৃষ্ঠা নম্বর আবশ্যিক"],
+      required: [false, "অধ্যায়/পৃষ্ঠা নম্বর আবশ্যিক"],
       trim: true,
     },
     topics: {
