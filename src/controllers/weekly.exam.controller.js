@@ -45,7 +45,7 @@ export const getAllWeeklyExams = async (req, res) => {
   try {
     const exams = await WeeklyExam.find()
       .sort({ createdAt: -1 })
-      .populate("viewedBy.userId", "name studentClass roll avatar");
+      .populate("viewedBy.userId", "name studentClass roll avatar role");
 
     const safeExams = exams.map((exam) => {
       const obj = exam.toObject();
@@ -299,7 +299,7 @@ export const recordView = async (req, res) => {
         $inc: { viewCount: 1 },
       },
       { new: true },
-    ).populate("viewedBy.userId", "name studentClass roll avatar");
+    ).populate("viewedBy.userId", "name studentClass roll avatar role");
 
     if (!exam) {
       return res.status(404).json({ message: "পরীক্ষা পাওয়া যায়নি" });

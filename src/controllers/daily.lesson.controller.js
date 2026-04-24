@@ -58,6 +58,7 @@ export const getAllDailyLessons = async (req, res) => {
   try {
     const lessons = await DailyLesson.find()
       .populate("teacher", "name avatar role slug")
+      .populate("viewedBy.userId", "name studentClass roll avatar role") // ✅ যোগ করো
       .sort({ createdAt: -1 });
     res.json({ success: true, data: lessons });
   } catch (err) {
@@ -139,5 +140,41 @@ export const deleteDailyLesson = async (req, res) => {
   } catch (err) {
     console.error("❌ deleteDailyLesson:", err);
     res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ✅ নতুন function যোগ করো
+export const recordDailyLessonView = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "অনুমতি নেই" });
+    }
+
+    const lesson = await DailyLesson.findByIdAndUpdate(
+      id,
+      {
+        $push: { viewedBy: { userId, viewedAt: new Date() } },
+        $inc: { viewCount: 1 },
+      },
+      { new: true },
+    )
+      .populate("teacher", "name avatar role slug")
+      .populate("viewedBy.userId", "name studentClass roll avatar role");
+
+    if (!lesson) {
+      return res.status(404).json({ message: "পাঠ পাওয়া যায়নি" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      viewCount: lesson.viewCount,
+      viewedBy: lesson.viewedBy.filter((v) => v.userId),
+    });
+  } catch (err) {
+    console.error("recordDailyLessonView error:", err);
+    return res.status(500).json({ message: "Failed", error: err.message });
   }
 };

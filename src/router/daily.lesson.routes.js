@@ -8,7 +8,9 @@ import {
   getDailyLessonById,
   updateDailyLesson,
   deleteDailyLesson,
+  recordDailyLessonView,
 } from "../controllers/daily.lesson.controller.js";
+import { authenticate } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -22,6 +24,7 @@ const upload = multer({
 });
 
 router.post("/", upload.array("images", 10), createDailyLesson);
+router.patch("/:id/record-view", authenticate, recordDailyLessonView);
 router.get("/", getAllDailyLessons);
 router.get("/:id", getDailyLessonById);
 router.patch("/:id", updateDailyLesson);
