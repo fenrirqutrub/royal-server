@@ -47,6 +47,23 @@ const weeklyExamSchema = new mongoose.Schema(
         publicId: { type: String, required: true },
       },
     ],
+    viewCount: {
+      type: Number,
+      default: 0,
+    },
+    viewedBy: [
+      {
+        userId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "User",
+          required: true,
+        },
+        viewedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   { timestamps: true },
 );

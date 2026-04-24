@@ -40,10 +40,20 @@ const buildSlug = (ExamNumber, cls, subject, teacherSlug) =>
     .toLowerCase();
 
 // ── GET /api/weekly-exams ─────────────────────────────────
+
 export const getAllWeeklyExams = async (req, res) => {
   try {
-    const exams = await WeeklyExam.find().sort({ createdAt: -1 });
-    return res.status(200).json(exams);
+    const exams = await WeeklyExam.find()
+      .sort({ createdAt: -1 })
+      .populate("viewedBy.userId", "name studentClass roll avatar");
+
+    const safeExams = exams.map((exam) => {
+      const obj = exam.toObject();
+      obj.viewedBy = (obj.viewedBy || []).filter((v) => v.userId);
+      return obj;
+    });
+
+    return res.status(200).json(safeExams);
   } catch (err) {
     console.error("getAllWeeklyExams error:", err);
     return res.status(500).json({ message: "Failed", error: err.message });
@@ -267,6 +277,41 @@ export const deleteWeeklyExam = async (req, res) => {
     await WeeklyExam.findByIdAndDelete(req.params.id);
     return res.status(200).json({ message: "Deleted successfully" });
   } catch (err) {
+    return res.status(500).json({ message: "Failed", error: err.message });
+  }
+};
+
+// src/controllers/weekly.exam.controller.js
+
+export const recordView = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: "অনুমতি নেই" });
+    }
+
+    const exam = await WeeklyExam.findByIdAndUpdate(
+      id,
+      {
+        $push: { viewedBy: { userId, viewedAt: new Date() } },
+        $inc: { viewCount: 1 },
+      },
+      { new: true },
+    ).populate("viewedBy.userId", "name studentClass roll avatar");
+
+    if (!exam) {
+      return res.status(404).json({ message: "পরীক্ষা পাওয়া যায়নি" });
+    }
+
+    return res.status(200).json({
+      success: true,
+      viewCount: exam.viewCount,
+      viewedBy: exam.viewedBy.filter((v) => v.userId),
+    });
+  } catch (err) {
+    console.error("recordView error:", err);
     return res.status(500).json({ message: "Failed", error: err.message });
   }
 };
