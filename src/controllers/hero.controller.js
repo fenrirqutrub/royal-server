@@ -31,13 +31,6 @@ export const createHero = async (req, res) => {
   try {
     const { title, imageUrl, imagePublicId } = req.body;
 
-    if (!title) {
-      return res.status(400).json({
-        success: false,
-        message: "Title is required",
-      });
-    }
-
     if (!imageUrl || !imagePublicId) {
       return res.status(400).json({
         success: false,
