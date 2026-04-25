@@ -5,6 +5,7 @@ import {
   createComplain,
   getAllComplains,
   updateComplainStatus,
+  deleteComplain,
 } from "../controllers/complain.controller.js";
 import { authenticate, isManager } from "../middleware/auth.middleware.js";
 
@@ -37,6 +38,19 @@ router.patch(
     next();
   },
   updateComplainStatus,
+);
+
+// শুধু manager অভিযোগ মুছতে পারবে
+router.delete(
+  "/:id",
+  authenticate,
+  (req, res, next) => {
+    if (!isManager(req.user.role)) {
+      return res.status(403).json({ message: "অনুমতি নেই" });
+    }
+    next();
+  },
+  deleteComplain,
 );
 
 export default router;
