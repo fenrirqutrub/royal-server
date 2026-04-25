@@ -5,7 +5,7 @@ const heroSchema = new mongoose.Schema(
   {
     title: {
       type: String,
-      required: [true, "Title is required"],
+      required: [false, "Title is required"],
       trim: true,
     },
     uniqueID: {
