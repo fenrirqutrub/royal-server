@@ -27,7 +27,10 @@ export const createComplain = async (req, res) => {
 export const getAllComplains = async (req, res) => {
   try {
     const complains = await Complain.find()
-      .populate("postedBy", "name role slug avatar phone")
+      .populate(
+        "postedBy",
+        "name role slug avatar phone fatherName motherName gramNam thana district studentClass roll schoolName",
+      )
       .sort({ createdAt: -1 });
 
     res.json(complains);
