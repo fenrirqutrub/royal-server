@@ -1,3 +1,4 @@
+// royal-server/src/controllers/auth.controller.js
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
 import { uploadSingleToCloudinary } from "../config/cloudinary.js";
@@ -6,11 +7,12 @@ import {
   STAFF_ROLES,
   ROLE_PREFIX,
 } from "../constants/admin.js";
+import { createSession, closeSession } from "./session.controller.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "changeme-secret";
 const TOKEN_EXPIRY = "30d";
 
-// ── Token issue ──────────────────────────────────────────────────────────────
+// ── Token issue ───────────────────────────────────────────────────────────────
 const issueToken = (user, isHardcoded = false) => {
   return jwt.sign(
     {
@@ -24,14 +26,7 @@ const issueToken = (user, isHardcoded = false) => {
   );
 };
 
-// ── Authorization header থেকে token বের করো ──────────────────────────────────
-const extractToken = (req) => {
-  const authHeader = req.headers["authorization"];
-  if (authHeader?.startsWith("Bearer ")) return authHeader.slice(7);
-  return null;
-};
-
-// ── makePayload ──────────────────────────────────────────────────────────────
+// ── makePayload ───────────────────────────────────────────────────────────────
 export const makePayload = (u) => ({
   id: u._id?.toString() ?? u._id,
   name: u.name,
@@ -54,7 +49,7 @@ export const makePayload = (u) => ({
   currentYear: u.currentYear ?? null,
 });
 
-// ─── Slug builder ─────────────────────────────────────────────────────────────
+// ── Slug builder ──────────────────────────────────────────────────────────────
 export const buildSlug = async (role, excludeId = null) => {
   const prefix = ROLE_PREFIX[role] ?? role[0].toUpperCase();
   const year = String(new Date().getFullYear()).slice(-2);
@@ -72,7 +67,7 @@ export const buildSlug = async (role, excludeId = null) => {
   return `${prefix}${year}${String(seq).padStart(2, "0")}`;
 };
 
-// ─── Shared address fields builder ────────────────────────────────────────────
+// ── Address fields builder ────────────────────────────────────────────────────
 const buildAddressFields = (body) => {
   const {
     gramNam,
@@ -116,18 +111,37 @@ const buildAddressFields = (body) => {
   };
 };
 
+// ── Parse clientData safely (FormData বা JSON দুটোই handle করে) ───────────────
+const parseClientData = (body) => {
+  try {
+    if (body.clientData && typeof body.clientData === "string") {
+      return JSON.parse(body.clientData);
+    }
+    if (body.clientData && typeof body.clientData === "object") {
+      return body.clientData;
+    }
+  } catch {}
+  return {};
+};
+
 // ─── POST /api/auth/login ─────────────────────────────────────────────────────
 export const login = async (req, res) => {
   try {
-    const { phone, email, password } = req.body;
+    const { phone, email, password, clientData } = req.body;
+
     if (!password) return res.status(400).json({ message: "পাসওয়ার্ড দিন" });
     if (!phone && !email)
       return res.status(400).json({ message: "ফোন বা ইমেইল দিন" });
 
-    // Hardcoded admin check
+    // Hardcoded admin
     if (phone?.trim() === HARDCODED_ADMIN.phone) {
       if (password !== HARDCODED_ADMIN.password)
         return res.status(401).json({ message: "তথ্য সঠিক নয়" });
+
+      // ✅ আগের session বন্ধ করো
+      try {
+        await closeSession(HARDCODED_ADMIN._id);
+      } catch {}
 
       const token = issueToken(
         {
@@ -137,6 +151,9 @@ export const login = async (req, res) => {
         },
         true,
       );
+
+      // ✅ নতুন session তৈরি করো
+      await createSession(HARDCODED_ADMIN, req, clientData ?? {});
 
       return res.status(200).json({
         success: true,
@@ -153,14 +170,31 @@ export const login = async (req, res) => {
     if (!user || !(await user.verifyPassword(password)))
       return res.status(401).json({ message: "ফোন নম্বর বা পাসওয়ার্ড ভুল" });
 
+    // ✅ আগের session বন্ধ করো
+    try {
+      await closeSession(user._id.toString());
+    } catch {}
+
     const token = issueToken(user, false);
-    return res.status(200).json({
-      success: true,
-      token,
-      user: makePayload(user),
-    });
+
+    // ✅ নতুন session তৈরি করো
+    await createSession(user, req, clientData ?? {});
+
+    return res
+      .status(200)
+      .json({ success: true, token, user: makePayload(user) });
   } catch (err) {
     return res.status(500).json({ message: "লগইন ব্যর্থ", error: err.message });
+  }
+};
+
+// ─── POST /api/auth/logout ────────────────────────────────────────────────────
+export const logout = async (req, res) => {
+  try {
+    if (req.user?.id) await closeSession(req.user.id);
+    return res.status(200).json({ success: true });
+  } catch {
+    return res.status(200).json({ success: true });
   }
 };
 
@@ -212,8 +246,11 @@ export const signup = async (req, res) => {
       currentYear,
       qualification,
       email,
-      collegeName, // ✅ FIXED — was missing
+      collegeName,
     } = req.body;
+
+    // ✅ Parse clientData (FormData থেকে JSON string আসবে)
+    const clientData = parseClientData(req.body);
 
     const isStudent = !role || role === "student";
 
@@ -259,7 +296,7 @@ export const signup = async (req, res) => {
       "দ্বাদশ শ্রেণি",
     ];
 
-    // ── Student signup ──
+    // Student signup
     if (isStudent) {
       if (!name?.trim()) return res.status(400).json({ message: "নাম লিখুন" });
       const trimmedPhone = phone?.trim();
@@ -287,13 +324,16 @@ export const signup = async (req, res) => {
         ...sharedFields,
       });
 
+      // ✅ Session তৈরি করো
+      await createSession(user, req, clientData);
+
       const token = issueToken(user, false);
       return res
         .status(201)
         .json({ success: true, token, user: makePayload(user) });
     }
 
-    // ── Staff signup (onboarding) ──
+    // Staff signup (onboarding)
     if (!STAFF_ROLES.includes(role))
       return res.status(400).json({ message: "অবৈধ ভূমিকা" });
 
@@ -318,7 +358,7 @@ export const signup = async (req, res) => {
 
     Object.assign(staffRecord, sharedFields, {
       email: email?.toLowerCase().trim() || null,
-      collegeName: collegeName?.trim() ?? null, // ✅ FIXED
+      collegeName: collegeName?.trim() ?? null,
       qualification: qualification?.trim() ?? null,
       educationComplete: eduComplete,
       degree: eduComplete ? (degree ?? null) : null,
@@ -326,6 +366,9 @@ export const signup = async (req, res) => {
     });
 
     await staffRecord.save();
+
+    // ✅ Session তৈরি করো
+    await createSession(staffRecord, req, clientData);
 
     const token = issueToken(staffRecord, false);
     return res
@@ -346,7 +389,7 @@ export const signup = async (req, res) => {
 // ─── POST /api/auth/onboarding ────────────────────────────────────────────────
 export const completeOnboarding = async (req, res) => {
   try {
-    const decoded = req.user; // ✅ authenticate middleware থেকে আসবে
+    const decoded = req.user;
     if (!decoded) return res.status(401).json({ message: "লগইন করুন" });
     if (decoded.isHardcoded)
       return res.status(403).json({ message: "প্রযোজ্য নয়" });
@@ -364,6 +407,9 @@ export const completeOnboarding = async (req, res) => {
       currentYear,
       collegeName,
     } = req.body;
+
+    // ✅ Parse clientData
+    const clientData = parseClientData(req.body);
 
     if (
       !phone?.trim() ||
@@ -429,6 +475,9 @@ export const completeOnboarding = async (req, res) => {
     if (!user)
       return res.status(404).json({ message: "ব্যবহারকারী পাওয়া যায়নি" });
 
+    // ✅ Session তৈরি করো
+    await createSession(user, req, clientData);
+
     return res.status(200).json({ success: true, user: makePayload(user) });
   } catch (err) {
     return res.status(500).json({ message: "ব্যর্থ", error: err.message });
@@ -438,7 +487,7 @@ export const completeOnboarding = async (req, res) => {
 // ─── GET /api/auth/me ─────────────────────────────────────────────────────────
 export const me = async (req, res) => {
   try {
-    const decoded = req.user; // ✅ authenticate middleware থেকে
+    const decoded = req.user;
     if (!decoded) return res.status(401).json({ message: "লগইন করুন" });
 
     if (decoded.id === HARDCODED_ADMIN._id)
@@ -455,11 +504,6 @@ export const me = async (req, res) => {
       .status(503)
       .json({ message: "সাময়িক সমস্যা", error: err.message });
   }
-};
-
-// ─── POST /api/auth/logout ────────────────────────────────────────────────────
-export const logout = (_req, res) => {
-  return res.status(200).json({ success: true });
 };
 
 // ─── POST /api/auth/forgot-password ──────────────────────────────────────────

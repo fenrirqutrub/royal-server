@@ -1,3 +1,5 @@
+// /src/router/user.routes.js
+
 import express from "express";
 import {
   login,
@@ -19,7 +21,15 @@ import {
   updateProfile,
   updateAvatar,
 } from "../controllers/user.controller.js";
-import { authenticate } from "../middleware/auth.middleware.js";
+import {
+  heartbeat,
+  getSessions,
+  getSessionSummary,
+} from "../controllers/session.controller.js"; // ✅ নতুন
+import {
+  authenticate,
+  authenticateOptional,
+} from "../middleware/auth.middleware.js";
 import {
   uploadAvatar,
   uploadSingleImage,
@@ -30,7 +40,6 @@ const router = express.Router();
 
 // ── Auth (public) ──
 router.post("/auth/login", login);
-router.post("/auth/logout", logout);
 router.post("/auth/check-staff-phone", checkStaffPhone);
 router.post("/auth/signup", uploadAvatar, handleUploadError, signup);
 router.post("/auth/forgot-password", forgotPassword);
@@ -38,6 +47,7 @@ router.post("/auth/reset-password", resetPassword);
 
 // ── Auth (protected) ──
 router.get("/auth/me", authenticate, me);
+router.post("/auth/logout", authenticate, logout); // ✅ authenticate দিলাম session close এর জন্য
 router.post(
   "/auth/onboarding",
   authenticate,
@@ -46,14 +56,19 @@ router.post(
   completeOnboarding,
 );
 
-// ── User CRUD (admin panel — protected) ──
+// ── Session tracking ──
+router.post("/sessions/heartbeat", authenticate, heartbeat); // ✅ নতুন
+router.get("/sessions", authenticate, getSessions); // ✅ নতুন
+router.get("/sessions/summary", authenticate, getSessionSummary); // ✅ নতুন
+
+// ── User CRUD ──
 router.get("/users/public", getPublicStaff);
 router.get("/users", authenticate, getUsers);
 router.post("/users", authenticate, createUser);
 router.patch("/users/:id", authenticate, updateUser);
 router.delete("/users/:id", authenticate, deleteUser);
 
-// ── Profile (slug-based) ──
+// ── Profile ──
 router.get("/users/:slug/profile", getProfile);
 router.patch("/users/:slug/profile", authenticate, updateProfile);
 router.post(
