@@ -27,10 +27,7 @@ import {
   getSessionSummary,
   getSessionHistory,
 } from "../controllers/session.controller.js";
-import {
-  authenticate,
-  authenticateOptional,
-} from "../middleware/auth.middleware.js";
+import { authenticate } from "../middleware/auth.middleware.js";
 import {
   uploadAvatar,
   uploadSingleImage,
@@ -48,7 +45,7 @@ router.post("/auth/reset-password", resetPassword);
 
 // ── Auth (protected) ──
 router.get("/auth/me", authenticate, me);
-router.post("/auth/logout", authenticate, logout); // ✅ authenticate দিলাম session close এর জন্য
+router.post("/auth/logout", authenticate, logout);
 router.post(
   "/auth/onboarding",
   authenticate,
