@@ -1,6 +1,7 @@
 // royal-server/src/controllers/session.controller.js
 import { UAParser } from "ua-parser-js";
 import Session from "../models/session.model.js";
+import { getLocationFromIP } from "../utils/ipLocation.js";
 
 // ── IP extract ────────────────────────────────────────────────────────────────
 const getIP = (req) =>
@@ -31,7 +32,7 @@ const parseUA = (uaString) => {
   };
 };
 
-// ── Safe extract — কোনো field না থাকলে null ──────────────────────────────────
+// ── Safe extract ──────────────────────────────────────────────────────────────
 const safeObj = (obj, defaults) => {
   if (!obj || typeof obj !== "object") return defaults;
   const result = {};
@@ -41,10 +42,20 @@ const safeObj = (obj, defaults) => {
   return result;
 };
 
-// ── createSession — login/signup controller থেকে call হবে ────────────────────
+// ── createSession ─────────────────────────────────────────────────────────────
 export const createSession = async (user, req, clientData = {}) => {
   try {
     const ua = parseUA(req.headers["user-agent"]);
+    const ip = getIP(req);
+
+    // ✅ IP-based location (async, non-blocking)
+    let location = {};
+    try {
+      location = await getLocationFromIP(ip);
+    } catch {
+      // silent fail
+    }
+
     const {
       hardware = {},
       network = {},
@@ -58,7 +69,19 @@ export const createSession = async (user, req, clientData = {}) => {
       slug: user.slug ?? null,
       role: user.role,
       name: user.name,
-      ip: getIP(req),
+      ip,
+      location: safeObj(location, {
+        city: null,
+        region: null,
+        country: null,
+        countryCode: null,
+        lat: null,
+        lon: null,
+        timezone: null,
+        isp: null,
+        org: null,
+        as: null,
+      }),
       ...ua,
       hardware: safeObj(hardware, {
         screenWidth: null,
@@ -89,6 +112,11 @@ export const createSession = async (user, req, clientData = {}) => {
         pointerType: null,
         fonts: [],
         plugins: [],
+        maxTextureSize: null,
+        antialiasSupport: null,
+        audioSampleRate: null,
+        performanceMemory: null,
+        canvasFingerprint: null,
       }),
       network: safeObj(network, {
         type: null,
@@ -119,7 +147,7 @@ export const createSession = async (user, req, clientData = {}) => {
   }
 };
 
-// ── closeSession — logout/login controller থেকে call হবে ─────────────────────
+// ── closeSession ──────────────────────────────────────────────────────────────
 export const closeSession = async (userId) => {
   try {
     const session = await Session.findOne(
@@ -200,12 +228,7 @@ export const getSessions = async (req, res) => {
       );
       const activeMinutes = Math.round((s.activeSeconds ?? 0) / 60);
 
-      return {
-        ...s,
-        isOnline,
-        durationMinutes,
-        activeMinutes,
-      };
+      return { ...s, isOnline, durationMinutes, activeMinutes };
     });
 
     return res.status(200).json({
@@ -237,6 +260,7 @@ export const getSessionSummary = async (req, res) => {
           lastOS: { $last: "$os" },
           lastBrowser: { $last: "$browser" },
           lastIP: { $last: "$ip" },
+          lastLocation: { $last: "$location" },
           lastHardware: { $last: "$hardware" },
           lastNetwork: { $last: "$network" },
           lastBattery: { $last: "$battery" },
@@ -268,6 +292,48 @@ export const getSessionSummary = async (req, res) => {
     }));
 
     return res.status(200).json(result);
+  } catch (e) {
+    return res.status(500).json({ message: e.message });
+  }
+};
+
+// ✅ NEW: GET /api/sessions/history/:userId — সব session history
+export const getSessionHistory = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 50, page = 1 } = req.query;
+
+    if (!userId) return res.status(400).json({ message: "userId দরকার" });
+
+    const skip = (Number(page) - 1) * Number(limit);
+    const [sessions, total] = await Promise.all([
+      Session.find({ userId })
+        .sort({ loginAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      Session.countDocuments({ userId }),
+    ]);
+
+    const now = Date.now();
+    const enriched = sessions.map((s) => {
+      const isOnline =
+        !s.logoutAt && now - new Date(s.lastActiveAt).getTime() < 2 * 60 * 1000;
+      const endTime = s.logoutAt ? new Date(s.logoutAt) : new Date();
+      const durationMinutes = Math.round(
+        (endTime - new Date(s.loginAt)) / 60_000,
+      );
+      const activeMinutes = Math.round((s.activeSeconds ?? 0) / 60);
+
+      return { ...s, isOnline, durationMinutes, activeMinutes };
+    });
+
+    return res.status(200).json({
+      sessions: enriched,
+      total,
+      page: Number(page),
+      totalPages: Math.ceil(total / Number(limit)),
+    });
   } catch (e) {
     return res.status(500).json({ message: e.message });
   }

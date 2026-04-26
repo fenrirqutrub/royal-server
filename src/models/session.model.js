@@ -15,6 +15,20 @@ const sessionSchema = new mongoose.Schema(
     // ── Network ──
     ip: { type: String, default: null },
 
+    // ✅ IP-based Location
+    location: {
+      city: { type: String, default: null },
+      region: { type: String, default: null },
+      country: { type: String, default: null },
+      countryCode: { type: String, default: null },
+      lat: { type: Number, default: null },
+      lon: { type: Number, default: null },
+      timezone: { type: String, default: null },
+      isp: { type: String, default: null },
+      org: { type: String, default: null },
+      as: { type: String, default: null },
+    },
+
     // ── Browser & OS (UA Parser) ──
     browser: {
       name: { type: String, default: null },
@@ -48,7 +62,6 @@ const sessionSchema = new mongoose.Schema(
       cookiesEnabled: { type: Boolean, default: null },
       doNotTrack: { type: String, default: null },
       pdfViewerEnabled: { type: Boolean, default: null },
-      // ✅ New fields
       webglVendor: { type: String, default: null },
       webglRenderer: { type: String, default: null },
       screenResolution: { type: String, default: null },
@@ -61,6 +74,12 @@ const sessionSchema = new mongoose.Schema(
       pointerType: { type: String, default: null },
       fonts: { type: [String], default: [] },
       plugins: { type: [String], default: [] },
+      // ✅ New extra fields
+      maxTextureSize: { type: Number, default: null },
+      antialiasSupport: { type: Boolean, default: null },
+      audioSampleRate: { type: Number, default: null },
+      performanceMemory: { type: Number, default: null },
+      canvasFingerprint: { type: String, default: null },
     },
 
     // ── Network Info ──
@@ -86,7 +105,7 @@ const sessionSchema = new mongoose.Schema(
       outerHeight: { type: Number, default: null },
     },
 
-    // ✅ New: Orientation
+    // ── Orientation ──
     orientation: {
       angle: { type: Number, default: null },
       type: { type: String, default: null },
@@ -108,19 +127,17 @@ sessionSchema.index({ lastActiveAt: -1 });
 sessionSchema.index({ role: 1 });
 sessionSchema.index({ logoutAt: 1 });
 
-// ── Virtual: isOnline ──
+// ── Virtuals ──
 sessionSchema.virtual("isOnline").get(function () {
   if (this.logoutAt) return false;
   return Date.now() - new Date(this.lastActiveAt).getTime() < 2 * 60 * 1000;
 });
 
-// ── Virtual: durationMinutes ──
 sessionSchema.virtual("durationMinutes").get(function () {
   const end = this.logoutAt ? new Date(this.logoutAt) : new Date();
   return Math.round((end - new Date(this.loginAt)) / 60_000);
 });
 
-// ── Virtual: activeMinutes ──
 sessionSchema.virtual("activeMinutes").get(function () {
   return Math.round((this.activeSeconds ?? 0) / 60);
 });

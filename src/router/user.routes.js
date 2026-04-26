@@ -25,7 +25,8 @@ import {
   heartbeat,
   getSessions,
   getSessionSummary,
-} from "../controllers/session.controller.js"; // ✅ নতুন
+  getSessionHistory,
+} from "../controllers/session.controller.js";
 import {
   authenticate,
   authenticateOptional,
@@ -57,9 +58,6 @@ router.post(
 );
 
 // ── Session tracking ──
-router.post("/sessions/heartbeat", authenticate, heartbeat); // ✅ নতুন
-router.get("/sessions", authenticate, getSessions); // ✅ নতুন
-router.get("/sessions/summary", authenticate, getSessionSummary); // ✅ নতুন
 
 // ── User CRUD ──
 router.get("/users/public", getPublicStaff);
@@ -78,5 +76,10 @@ router.post(
   handleUploadError,
   updateAvatar,
 );
+
+router.post("/sessions/heartbeat", authenticate, heartbeat);
+router.get("/sessions", authenticate, getSessions);
+router.get("/sessions/summary", authenticate, getSessionSummary);
+router.get("/sessions/history/:userId", authenticate, getSessionHistory);
 
 export default router;
