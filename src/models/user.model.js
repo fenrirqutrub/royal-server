@@ -1,12 +1,12 @@
-// src/models/user.model.jsimport mongoose from "mongoose";
-import bcrypt from "bcrypt";
+// src/models/user.model.js
 import mongoose from "mongoose";
+import bcrypt from "bcrypt";
 
 const ROLES = ["student", "teacher", "principal", "admin", "owner"];
 const RELIGIONS = ["ইসলাম", "হিন্দু", "বৌদ্ধ", "খ্রিষ্টান"];
 const SUBJECTS = ["বিজ্ঞান", "মানবিক", "বাণিজ্য"];
-const DEGREES = ["hsc", "hons", "masters"];
-const CURRENT_YEARS = ["1st", "2nd", "3rd", "4th", "mba", "mbbs", "ma"];
+const DEGREES = ["এইচএসসি", "স্নাতক", "স্নাতকোত্তর"];
+const CURRENT_YEARS = ["১ম", "২য়", "৩য়", "৪র্থ", "এমবিএ", "এমবিবিএস", "এমএ"];
 const SALT_ROUNDS = 12;
 
 const userSchema = new mongoose.Schema(
@@ -50,7 +50,7 @@ const userSchema = new mongoose.Schema(
 
     // ── Staff Education (teacher/principal/admin) ──
     collegeName: { type: String, trim: true, default: null },
-    qualification: { type: String, trim: true, default: null },
+    subject: { type: String, trim: true, default: null },
     educationComplete: { type: Boolean, default: null },
     degree: { type: String, enum: [...DEGREES, null], default: null },
     currentYear: {

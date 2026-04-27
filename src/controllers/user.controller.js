@@ -207,7 +207,7 @@ export const updateProfile = async (req, res) => {
       permanentDistrict,
       permanentDivision,
       collegeName,
-      qualification,
+      subject,
       educationComplete,
       degree,
       currentYear,
@@ -216,7 +216,7 @@ export const updateProfile = async (req, res) => {
       roll,
       schoolName,
       password,
-      avatar, // ✅ direct Cloudinary upload থেকে আসবে
+      avatar,
     } = req.body;
 
     // ── Conflict checks ──
@@ -314,8 +314,7 @@ export const updateProfile = async (req, res) => {
     // ── Staff Education ──
     if (collegeName !== undefined)
       update.collegeName = collegeName?.trim() || null;
-    if (qualification !== undefined)
-      update.qualification = qualification?.trim() || null;
+    if (subject !== undefined) update.subject = subject?.trim() || null;
     if (educationComplete !== undefined)
       update.educationComplete =
         educationComplete === true || educationComplete === "true";

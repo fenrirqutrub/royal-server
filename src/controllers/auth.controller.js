@@ -43,7 +43,7 @@ export const makePayload = (u) => ({
   dateOfBirth: u.dateOfBirth ?? null,
   religion: u.religion ?? null,
   collegeName: u.collegeName ?? null,
-  qualification: u.qualification ?? null,
+  subject: u.subject ?? null, // <-- Here
   educationComplete: u.educationComplete ?? null,
   degree: u.degree ?? null,
   currentYear: u.currentYear ?? null,
@@ -244,7 +244,7 @@ export const signup = async (req, res) => {
       educationComplete,
       degree,
       currentYear,
-      qualification,
+      subject,
       email,
       collegeName,
     } = req.body;
@@ -359,7 +359,7 @@ export const signup = async (req, res) => {
     Object.assign(staffRecord, sharedFields, {
       email: email?.toLowerCase().trim() || null,
       collegeName: collegeName?.trim() ?? null,
-      qualification: qualification?.trim() ?? null,
+      subject: subject?.trim() ?? null,
       educationComplete: eduComplete,
       degree: eduComplete ? (degree ?? null) : null,
       currentYear: !eduComplete ? (currentYear ?? null) : null,
