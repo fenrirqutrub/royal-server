@@ -31,7 +31,7 @@ export const getPublicStaff = async (req, res) => {
     const users = await User.find({
       role: { $in: ["teacher", "principal", "admin"] },
     })
-      .select("name role avatar slug collegeName degree")
+      .select("name role avatar slug collegeName degree subject")
       .sort({ createdAt: -1 });
 
     return res.status(200).json(users);
