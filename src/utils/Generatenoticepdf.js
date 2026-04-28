@@ -374,11 +374,7 @@ const drawMetaRow = (doc, notice, W, mm, fonts) => {
 
 // ── Body text ─────────────────────────────────────────────────────────────────
 const drawBody = (doc, notice, W, mm, fonts) => {
-  const fullText =
-    "এতদ্বারা সকলের অবগতির জন্য জানানো যাইতেছে যে, " +
-    notice.notice +
-    "ঘোষনা করা হইলো।";
-
+  const fullText = notice.notice;
   drawMixedBlock(doc, fullText, mm(20), mm(80), fonts, 15, {
     blockWidth: W - mm(40),
     lineHeight: 28,
